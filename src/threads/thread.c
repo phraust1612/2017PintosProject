@@ -122,6 +122,7 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
+  printf("thread_tick : %s\n", t->name);
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -211,6 +212,7 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
+  // deny if this function was called by interruption
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 

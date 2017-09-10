@@ -382,8 +382,11 @@ intr_handler (struct intr_frame *frame)
       in_external_intr = false;
       pic_end_of_interrupt (frame->vec_no); 
 
-      if (yield_on_return) 
+      if (yield_on_return) {
+        struct thread* tmpt = thread_current();
+        printf("interrupt : %s\n",tmpt->name);
         thread_yield (); 
+        }
     }
 }
 
