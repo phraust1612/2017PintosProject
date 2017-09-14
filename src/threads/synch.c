@@ -69,7 +69,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_insert_ordered(&sema->waiters, &thread_current()->elem, (list_less_func *) &higher_priority, NULL);
       thread_block ();
     }
   sema->value--;
@@ -179,6 +179,10 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
+  //int i;
+  //for(i=0; i<10; i++) lock->comeback_priority[i] = 0;
+  //lock->comeback_pointer = 0;
+  lock->comeback_priority = -1;
   sema_init (&lock->semaphore, 1);
 }
 
@@ -197,8 +201,37 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+  if(lock->holder != NULL)
+  {
+    lock_priority_donate(lock);
+  }
+  else
+    lock->holder = thread_current ();
+
+  // block current thread and insert it into sema->waiters
+  // then sema down
+  sema_down (&lock->semaphore); 
+}
+
+
+void
+lock_priority_donate(struct lock* lock)
+{
+  struct thread* tdonatee = lock->holder;
+  struct thread* tdonator = thread_current();
+  ASSERT(tdonatee->magic == 0xcd6abf4b);
+  ASSERT(tdonator->magic == 0xcd6abf4b);
+
+  if(tdonatee->priority < tdonator->priority)
+  {
+    printf("donate start, donator : %d in tid%d, donatee : %d in tid%d...\n", \
+        (int) tdonator->priority, (int) tdonator->tid, (int) tdonatee->priority, (int) tdonatee->tid);
+    //lock->comeback_priority[lock->comeback_pointer] = tdonatee->priority;
+    //lock->comeback_pointer++;
+    lock->comeback_priority = tdonatee->priority;
+
+    specific_thread_set_priority(tdonator->priority, tdonatee);
+  }
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -233,6 +266,20 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  //if(!list_empty(&lock->semaphore.waiters))
+  //if(lock->comeback_pointer<=0)
+  //{
+    //int recover_priority = lock->comeback_priority[lock->comeback_pointer-1];
+    int recover_priority = lock->comeback_priority;
+    if(recover_priority>=PRI_MIN && recover_priority<=PRI_MAX)
+    {
+      thread_current()->priority = recover_priority;
+      //lock->comeback_priority[lock->comeback_pointer-1] = 0;
+      //lock->comeback_pointer--;
+      lock->comeback_priority = -1;
+    }
+  //}
+    
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }

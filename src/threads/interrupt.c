@@ -384,7 +384,7 @@ intr_handler (struct intr_frame *frame)
 
       if (yield_on_return) {
         struct thread* tmpt = thread_current();
-        printf("interrupt : %s\n",tmpt->name);
+        //printf("interrupt : %s\n",tmpt->name);
         thread_yield (); 
         }
     }

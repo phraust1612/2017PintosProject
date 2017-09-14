@@ -29,6 +29,9 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
+// sleep되어 블락된 스레드들의 linked list다.
+static struct list waiting_list;
+
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
    corresponding interrupt. */
@@ -44,7 +47,7 @@ timer_init (void)
   outb (0x40, count >> 8);
 
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
-  //printf("debugging : 
+  list_init (&waiting_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -100,8 +103,15 @@ timer_sleep (int64_t ticks)
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+ 
+  // 인터럽터는 끄고 이 스레드의 wakeup_tick을 저장해두고
+  // waiting_list에 정렬된 자리로 넣고 해당 스레드를 블락시킨다.
+  enum intr_level old_level = intr_disable ();
+  struct thread* curr_thread = thread_current();
+  curr_thread->wakeup_tick = start + ticks;
+  list_insert_ordered (&waiting_list, &curr_thread->elem, (list_less_func *) &less_wakeup_tick, NULL);
+  thread_block();
+  intr_set_level(old_level);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -136,9 +146,24 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  //printf("debugging : timer_interrupt called...\n");
   ticks++;
   thread_tick ();
+
+  // waiting_list가 비었으면 timer_interrupt는 더 할거 없음.
+  if(list_empty (&waiting_list)) return;
+  struct list_elem* tmppointer = list_begin(&waiting_list);
+  struct thread* i = list_entry(tmppointer, struct thread, elem);
+
+  // waiting_list는 이미 정렬된 상태로 만들고 있었으므로
+  // 현재 ticks가 TCB에 있는 wakeup_tick 보다 높아지면 그 스레드를 언블락한다. 
+  while(i->wakeup_tick <= ticks)
+  {
+    tmppointer = list_remove(tmppointer);
+    thread_unblock(i);
+    if (tmppointer == list_end(&waiting_list)) break;
+    i = list_entry(tmppointer, struct thread, elem);
+  }
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

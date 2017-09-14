@@ -13,9 +13,3 @@ test_alarm_zero (void)
   timer_sleep (0);
   pass ();
 }
-/*
-void
-test_hello (void) 
-{
-  printf("hello, world!");
-}*/

@@ -129,13 +129,11 @@ void thread_yield (void);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
-void specific_thread_set_priority (int new_priority, struct thread* new_t);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-static bool is_thread (struct thread *) UNUSED;
 
 // less_wakeup_tick
 // return true if x has less wakeup_tick than y
