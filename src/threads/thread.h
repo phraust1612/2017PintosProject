@@ -93,6 +93,10 @@ struct thread
     struct list_elem elem;              /* List element. */
     
     int wakeup_tick;
+    // TODO : below vars
+    // lock_list : 이 스레드가 own하고 있는 모든 locks
+    struct list lock_list;
+    int origin_priority;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

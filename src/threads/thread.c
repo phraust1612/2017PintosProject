@@ -199,7 +199,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  thread_set_priority (thread_current()->priority);
+  specific_thread_set_priority (thread_current()->priority, thread_current());
 
   return tid;
 }
@@ -319,6 +319,9 @@ void
 thread_set_priority (int new_priority) 
 {
   struct thread* tcurrent = thread_current();
+  tcurrent->origin_priority = new_priority;
+  if(tcurrent->tid == 1 && new_priority == 32)
+    ASSERT(false);
   specific_thread_set_priority(new_priority, tcurrent);
 }
 
@@ -464,7 +467,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->origin_priority = priority;
   t->magic = THREAD_MAGIC;
+  list_init(&t->lock_list);
   initial_thread->wakeup_tick = 0;
 }
 

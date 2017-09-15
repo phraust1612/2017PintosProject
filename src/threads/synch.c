@@ -106,19 +106,26 @@ sema_try_down (struct semaphore *sema)
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
-void
+// returns poped thread pointer.
+struct thread*
 sema_up (struct semaphore *sema) 
 {
   enum intr_level old_level;
+  struct thread* ans = NULL;
 
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  {
+    ans = list_entry (list_pop_front (&sema->waiters),
+                                struct thread, elem);
+    thread_unblock (ans);
+  }
   sema->value++;
   intr_set_level (old_level);
+
+  return ans;
 }
 
 static void sema_test_helper (void *sema_);
@@ -179,10 +186,6 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
-  //int i;
-  //for(i=0; i<10; i++) lock->comeback_priority[i] = 0;
-  //lock->comeback_pointer = 0;
-  lock->comeback_priority = -1;
   sema_init (&lock->semaphore, 1);
 }
 
@@ -201,16 +204,23 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  enum intr_level old_level = intr_disable();
   if(lock->holder != NULL)
   {
     lock_priority_donate(lock);
   }
   else
-    lock->holder = thread_current ();
+  {
+    struct thread* tcurrent = thread_current();
+    list_push_back(&tcurrent->lock_list, &lock->elem);
+    lock->holder = tcurrent;
+  }
+
 
   // block current thread and insert it into sema->waiters
   // then sema down
   sema_down (&lock->semaphore); 
+  intr_set_level(old_level);
 }
 
 
@@ -224,12 +234,6 @@ lock_priority_donate(struct lock* lock)
 
   if(tdonatee->priority < tdonator->priority)
   {
-    printf("donate start, donator : %d in tid%d, donatee : %d in tid%d...\n", \
-        (int) tdonator->priority, (int) tdonator->tid, (int) tdonatee->priority, (int) tdonatee->tid);
-    //lock->comeback_priority[lock->comeback_pointer] = tdonatee->priority;
-    //lock->comeback_pointer++;
-    lock->comeback_priority = tdonatee->priority;
-
     specific_thread_set_priority(tdonator->priority, tdonatee);
   }
 }
@@ -266,22 +270,42 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  //if(!list_empty(&lock->semaphore.waiters))
-  //if(lock->comeback_pointer<=0)
-  //{
-    //int recover_priority = lock->comeback_priority[lock->comeback_pointer-1];
-    int recover_priority = lock->comeback_priority;
-    if(recover_priority>=PRI_MIN && recover_priority<=PRI_MAX)
+  enum intr_level old_level = intr_disable();
+  // sema up and pop from sema->waiters
+  struct thread* tpopped = sema_up (&lock->semaphore);
+  lock->holder = tpopped;
+  // pop this lock from thread's lock_list
+  struct thread* tcurrent = thread_current();
+  list_remove(&lock->elem);
+
+  if(list_empty(&tcurrent->lock_list))
+    specific_thread_set_priority(tcurrent->origin_priority,tcurrent);
+  else
+  {
+    int find_priority = 0;
+    int comparing_priority;
+    struct list_elem* i = list_begin(&tcurrent->lock_list);
+    struct list_elem* endpoint = list_end(&tcurrent->lock_list);
+    struct lock* plock;
+    struct list_elem* tmpelem;
+    struct thread* tmpthread;
+    while(i != endpoint)
     {
-      thread_current()->priority = recover_priority;
-      //lock->comeback_priority[lock->comeback_pointer-1] = 0;
-      //lock->comeback_pointer--;
-      lock->comeback_priority = -1;
+      plock = list_entry(i, struct lock, elem);
+      tmpelem = list_begin(&plock->semaphore.waiters);
+      tmpthread = list_entry(tmpelem, struct thread, elem);
+      comparing_priority = tmpthread->priority;
+      if(find_priority< comparing_priority)
+        find_priority = comparing_priority;
+      i = list_next(i);
     }
-  //}
-    
-  lock->holder = NULL;
-  sema_up (&lock->semaphore);
+
+    if(find_priority > tcurrent->origin_priority)
+      specific_thread_set_priority(find_priority, tcurrent);
+    else
+      specific_thread_set_priority(tcurrent->origin_priority, tcurrent);
+  }
+  intr_set_level(old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false
