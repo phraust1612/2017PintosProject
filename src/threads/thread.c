@@ -121,7 +121,6 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
-  //printf("thread_tick : %s\n", t->name);
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -469,7 +468,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->origin_priority = priority;
   t->magic = THREAD_MAGIC;
-  list_init(&t->lock_list);
+  t->plock_acq = NULL;
+  list_init(&t->lock_own_list);
   initial_thread->wakeup_tick = 0;
 }
 

@@ -14,15 +14,14 @@ struct semaphore
 void sema_init (struct semaphore *, unsigned value);
 void sema_down (struct semaphore *);
 bool sema_try_down (struct semaphore *);
-struct thread* sema_up (struct semaphore *);
+void sema_up (struct semaphore *);
 void sema_self_test (void);
 
 /* Lock. */
 struct lock 
   {
-    //int comeback_priority[10];
-    //int comeback_pointer;
-    struct list_elem elem;
+    // thread가 own하고 있는 elem
+    struct list_elem own_elem;
 
     struct thread *holder;      /* Thread holding lock (for debugging). */
     struct semaphore semaphore; /* Binary semaphore controlling access. */
@@ -33,7 +32,7 @@ void lock_acquire (struct lock *);
 bool lock_try_acquire (struct lock *);
 void lock_release (struct lock *);
 bool lock_held_by_current_thread (const struct lock *);
-void lock_priority_donate (struct lock* lock);
+void lock_priority_donate (struct lock* lock, int new_priority);
 
 /* Condition variable. */
 struct condition 

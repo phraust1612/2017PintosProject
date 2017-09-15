@@ -93,9 +93,11 @@ struct thread
     struct list_elem elem;              /* List element. */
     
     int wakeup_tick;
-    // TODO : below vars
     // lock_list : 이 스레드가 own하고 있는 모든 locks
-    struct list lock_list;
+    struct list lock_own_list;
+    // lock_acq_list : 이 스레드가 acquire하고 싶어하는 'a' lock
+    //struct list_elem* lock_acq_elem;
+    struct lock* plock_acq;
     int origin_priority;
 
 #ifdef USERPROG
