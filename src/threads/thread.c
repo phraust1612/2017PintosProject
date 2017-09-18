@@ -313,35 +313,80 @@ thread_yield (void)
   intr_set_level (old_level);
 }
 
+void
+recalculate_priority()
+{
+  enum intr_level old_level = intr_disable();
+  struct thread* tcurrent = thread_current();
+  // release되는 락의 owner 스레드가 더 갖고 있는 락이 없으면
+  // 도네이션 받은 priority를 원래대로 돌려놓는다.
+  if(list_empty(&tcurrent->lock_own_list))
+  {
+    intr_set_level(old_level);
+    specific_thread_set_priority(tcurrent->origin_priority, tcurrent);
+  }
+  // release되는 락의 owner가 아직 더 락이 있으면
+  // 갖고 있는 락중에 가장 큰 priority를 갖는 것을 찾아
+  // 도네이션 받은 priority에서 뭘로 돌아갈지 선택해서 돌아간다.
+  else
+  {
+    int find_priority = 0;
+    int comparing_priority;
+    struct list_elem* i = list_begin(&tcurrent->lock_own_list);
+    struct list_elem* endpoint = list_end(&tcurrent->lock_own_list);
+    struct lock* plock;
+    struct list_elem* tmpelem;
+    struct thread* tmpthread;
+    while(i != endpoint)
+    {
+      plock = list_entry(i, struct lock, own_elem);
+      tmpelem = list_begin(&plock->semaphore.waiters);
+      tmpthread = list_entry(tmpelem, struct thread, elem);
+      comparing_priority = tmpthread->priority;
+      if(find_priority< comparing_priority)
+        find_priority = comparing_priority;
+      i = list_next(i);
+    }
+
+    if(find_priority > tcurrent->origin_priority)
+    {
+      intr_set_level(old_level);
+      specific_thread_set_priority(find_priority, tcurrent);
+    }
+    else
+    {
+      intr_set_level(old_level);
+      specific_thread_set_priority(tcurrent->origin_priority, tcurrent);
+    }
+  }
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
+  enum intr_level old_level = intr_disable();
   struct thread* tcurrent = thread_current();
   tcurrent->origin_priority = new_priority;
-  if(tcurrent->tid == 1 && new_priority == 32)
-    ASSERT(false);
+  intr_set_level(old_level);
   specific_thread_set_priority(new_priority, tcurrent);
+  recalculate_priority();
 }
 
 void
 specific_thread_set_priority(int new_priority, struct thread* new_t)
 {
-  // should be modified later...
   enum intr_level old_level = intr_disable();
-
-  //printf("curr : %s, new priority : %d...\n",tcurrent->name, new_priority);
   new_t->priority = new_priority;
 
   if(list_empty (&ready_list)) return;
   list_sort(&ready_list, (list_less_func*) &higher_priority, NULL);
   struct list_elem* first_elem = list_begin(&ready_list);
   struct thread* tfirst = list_entry(first_elem, struct thread, elem);
+  intr_set_level(old_level);
 
   if(tfirst->priority >= thread_current()->priority)
     thread_yield();
-
-  intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
@@ -587,7 +632,6 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-// comment
 bool less_wakeup_tick(struct list_elem* x, struct list_elem* y, void* aux UNUSED)
 {
   struct thread* tmpx = list_entry(x, struct thread, elem);
@@ -596,7 +640,6 @@ bool less_wakeup_tick(struct list_elem* x, struct list_elem* y, void* aux UNUSED
   else return false;
 }
 
-// comment
 bool higher_priority (struct list_elem* x, struct list_elem* y, void* aux UNUSED)
 {
   struct thread* tmpx = list_entry(x, struct thread, elem);
