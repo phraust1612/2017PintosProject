@@ -409,6 +409,7 @@ cpu: ips=1000000
 megs: $mem
 log: bochsout.txt
 panic: action=fatal
+display_library: nogui
 EOF
     print BOCHSRC "gdbstub: enabled=1\n" if $debug eq 'gdb';
     print BOCHSRC "clock: sync=", $realtime ? 'realtime' : 'none',

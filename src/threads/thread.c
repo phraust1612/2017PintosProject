@@ -90,6 +90,9 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+#ifdef USERPROG
+  init_wait_sema_list();
+#endif
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -383,10 +386,10 @@ specific_thread_set_priority(int new_priority, struct thread* new_t)
   list_sort(&ready_list, (list_less_func*) &higher_priority, NULL);
   struct list_elem* first_elem = list_begin(&ready_list);
   struct thread* tfirst = list_entry(first_elem, struct thread, elem);
-  intr_set_level(old_level);
 
-  if(tfirst->priority >= thread_current()->priority)
+  if(tfirst->priority >= thread_current()->priority && !intr_context())
     thread_yield();
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */

@@ -17,6 +17,20 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+/* One semaphore in a list. */
+struct wait_semaphore_elem 
+  {
+    struct list_elem elem;              /* List element. */
+    struct semaphore semaphore;         /* This semaphore. */
+    tid_t parent_tid;
+    tid_t child_tid;
+  };
+
+struct list wait_sema_list;
+void init_wait_sema_list(void)
+{
+  list_init(&wait_sema_list);
+}
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -38,8 +52,17 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  char* dummy;
+  file_name = strtok_r((char*) file_name, " ", &dummy);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  struct wait_semaphore_elem wait_sema;
+  sema_init(&wait_sema.semaphore, 0);
+  wait_sema.parent_tid = thread_current()->tid;
+  wait_sema.child_tid = tid;
+  list_push_back(&wait_sema_list, &wait_sema.elem);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -53,6 +76,8 @@ start_process (void *f_name)
   char *file_name = f_name;
   struct intr_frame if_;
   bool success;
+  struct thread* tcurrent = thread_current();
+  sema_init(&tcurrent->wait_sema, 0);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -88,19 +113,45 @@ start_process (void *f_name)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  struct thread* tcurrent = thread_current();
+  struct list_elem* elem_pointer;
+  struct wait_semaphore_elem* i;
+
+  // wait_sema_list에서 해당되는 세마를 찾는다.
+  bool success_find = false;
+
+  elem_pointer = list_begin(&wait_sema_list);
+  while(elem_pointer != list_end(&wait_sema_list) && !list_empty(&wait_sema_list) && elem_pointer!=NULL)
+  {
+    i = list_entry(elem_pointer, struct wait_semaphore_elem, elem);
+    if(i->child_tid == child_tid && i->parent_tid == tcurrent->tid)
+    {
+      success_find = true;
+      break;
+    }
+    elem_pointer = list_next(elem_pointer);
+  }
+
+  if (success_find)
+  {
+    sema_down(&i->semaphore);
+    list_remove(&i->elem);
+    return 0;
+  }
+  else
+    return -1;
 }
 
 /* Free the current process's resources. */
 void
 process_exit (void)
 {
-  struct thread *curr = thread_current ();
+  struct thread *tcurrent = thread_current ();
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-  pd = curr->pagedir;
+  pd = tcurrent->pagedir;
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -110,10 +161,29 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      curr->pagedir = NULL;
+      tcurrent->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  struct list_elem* elem_pointer;
+  struct wait_semaphore_elem* i=NULL;
+  // wait_sema_list에서 해당되는 세마를 찾는다.
+  bool success_find = false;
+  
+  elem_pointer = list_begin(&wait_sema_list);
+  while(elem_pointer != list_end(&wait_sema_list) && !list_empty(&wait_sema_list) && elem_pointer!=NULL)
+  {
+    i = list_entry(elem_pointer, struct wait_semaphore_elem, elem);
+    if(i->child_tid == tcurrent->tid)
+    {
+      success_find = true;
+      break;
+    }
+    elem_pointer = list_next(elem_pointer);
+  }
+
+  sema_up(&i->semaphore);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -195,7 +265,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char* arg);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -214,6 +284,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+  char* dummy;
+  char* fn_copy; 
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -221,8 +293,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  fn_copy = palloc_get_page (0);
+  if (fn_copy == NULL)
+    return TID_ERROR;
+  strlcpy (fn_copy, file_name, PGSIZE);
   /* Open executable file. */
+  file_name = strtok_r((char*) file_name, " ", &dummy);
   file = filesys_open (file_name);
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -249,11 +327,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
       struct Elf32_Phdr phdr;
 
       if (file_ofs < 0 || file_ofs > file_length (file))
+      {
         goto done;
+      }
       file_seek (file, file_ofs);
 
       if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
+      {
         goto done;
+      }
       file_ofs += sizeof phdr;
       switch (phdr.p_type) 
         {
@@ -293,16 +375,20 @@ load (const char *file_name, void (**eip) (void), void **esp)
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
+              {
                 goto done;
+              }
             }
-          else
+          else{
             goto done;
+          }
           break;
         }
     }
 
+
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, fn_copy))
     goto done;
 
   /* Start address. */
@@ -427,7 +513,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char* arg) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -441,6 +527,57 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+
+  int tmp;
+  int argc = 0;
+  char* ret_ptr;
+  char* next_ptr;
+
+  char** pointer_tmp_stack = palloc_get_page (0);
+
+  // 스택에 arg 내용을 4바이트 단위씩 저장하고 각각의 포인터를 pointer_tmp_stack에도 저장(그게 argv)
+  if( strchr(arg, ' ') == NULL)
+  {
+    tmp = (int) (strlen(arg) + 4)/4;
+    tmp *= 4;
+    *esp -= tmp;
+    memcpy(*esp, arg, strlen(arg)+1);
+    memcpy((char**)pointer_tmp_stack+argc, esp, sizeof(char*));
+    argc += 1;
+  }
+  else{
+  for (ret_ptr = strtok_r(arg, " ", &next_ptr); ret_ptr!= NULL; ret_ptr = strtok_r(NULL, " ", &next_ptr))
+  {
+    tmp = (int) (strlen(ret_ptr) + 4)/4;
+    tmp *= 4;
+    *esp -= tmp;
+    memcpy(*esp, ret_ptr, strlen(ret_ptr)+1);
+    memcpy((char**)pointer_tmp_stack+argc, esp, sizeof(char*));
+    argc += 1;
+  }
+  }
+
+  // 마지막 argv가 0이 되게 스택에 저장
+  *esp -= sizeof(char*);
+
+  // argv[] 를 스택에 저장
+  *esp -= argc * sizeof(char*);
+  memcpy(*esp, pointer_tmp_stack, argc*sizeof(char*));
+  palloc_free_page (pointer_tmp_stack); 
+
+  // argv 를 스택에 저장
+
+  char* tmpp = *esp;
+  *esp -= sizeof(char**);
+  memcpy(*esp, &tmpp, sizeof(char **));
+
+  // argc 를 스택에 저장
+  *esp -= sizeof(int);
+  memcpy(*esp, &argc, sizeof(int));
+
+  // return address 크기만큼 스택에 저장.
+  *esp -= sizeof(void*);
+
   return success;
 }
 

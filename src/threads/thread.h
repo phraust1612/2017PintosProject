@@ -1,6 +1,10 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 
+#ifndef THREADS_SYNCH_H
+#include "threads/synch.h"
+#endif
+
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
@@ -103,6 +107,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    // wait 할 때 내릴 세마
+    struct semaphore wait_sema;
+    struct semaphore *parent_sema;
 #endif
 
     /* Owned by thread.c. */
