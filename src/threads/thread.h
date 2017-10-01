@@ -104,12 +104,11 @@ struct thread
     struct lock* plock_acq;
     int origin_priority;
 
+    struct list child_wait_sema;
+    struct thread* tparent;
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    // wait 할 때 내릴 세마
-    struct semaphore wait_sema;
-    struct semaphore *parent_sema;
 #endif
 
     /* Owned by thread.c. */

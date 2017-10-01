@@ -90,9 +90,6 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
-#ifdef USERPROG
-  init_wait_sema_list();
-#endif
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -518,6 +515,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->plock_acq = NULL;
   list_init(&t->lock_own_list);
+  t->tparent = running_thread();
+  list_init(&t->child_wait_sema);
   initial_thread->wakeup_tick = 0;
 }
 

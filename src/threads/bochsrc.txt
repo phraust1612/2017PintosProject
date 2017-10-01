@@ -5,7 +5,8 @@ cpu: ips=1000000
 megs: 4
 log: bochsout.txt
 panic: action=fatal
-clock: sync=none, time0=0
-ata0-master: type=disk, path=/tmp/PDtcSqAOOT.dsk, mode=flat, cylinders=1, heads=16, spt=63, translation=none
-com1: enabled=1, mode=term, dev=/dev/stdout
 display_library: nogui
+gdbstub: enabled=1
+clock: sync=none, time0=0
+ata0-master: type=disk, path=/tmp/OSGpk9YAJv.dsk, mode=flat, cylinders=1, heads=16, spt=63, translation=none
+com1: enabled=1, mode=file, dev=/dev/stdout

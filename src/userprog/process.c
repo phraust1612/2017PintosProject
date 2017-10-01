@@ -17,20 +17,13 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-/* One semaphore in a list. */
+
 struct wait_semaphore_elem 
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
-    tid_t parent_tid;
     tid_t child_tid;
   };
-
-struct list wait_sema_list;
-void init_wait_sema_list(void)
-{
-  list_init(&wait_sema_list);
-}
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -55,13 +48,15 @@ process_execute (const char *file_name)
   char* dummy;
   file_name = strtok_r((char*) file_name, " ", &dummy);
 
+  struct thread* tcurrent = thread_current();
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  enum intr_level old_level = intr_disable();
   struct wait_semaphore_elem wait_sema;
-  sema_init(&wait_sema.semaphore, 0);
-  wait_sema.parent_tid = thread_current()->tid;
   wait_sema.child_tid = tid;
-  list_push_back(&wait_sema_list, &wait_sema.elem);
+  sema_init(&wait_sema.semaphore, 0);
+  list_push_back(&tcurrent->child_wait_sema, &wait_sema.elem);
+  intr_set_level(old_level);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -77,7 +72,6 @@ start_process (void *f_name)
   struct intr_frame if_;
   bool success;
   struct thread* tcurrent = thread_current();
-  sema_init(&tcurrent->wait_sema, 0);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -113,33 +107,29 @@ start_process (void *f_name)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  struct thread* tcurrent = thread_current();
-  struct list_elem* elem_pointer;
-  struct wait_semaphore_elem* i;
+  enum intr_level old_level = intr_disable();
+  struct list_elem* elem_pointer = NULL;
+  struct wait_semaphore_elem* i = NULL;
 
-  // wait_sema_list에서 해당되는 세마를 찾는다.
   bool success_find = false;
+  struct thread* tcurrent = thread_current();
 
-  elem_pointer = list_begin(&wait_sema_list);
-  while(elem_pointer != list_end(&wait_sema_list) && !list_empty(&wait_sema_list) && elem_pointer!=NULL)
+  elem_pointer = list_begin(&(tcurrent->child_wait_sema));
+  while (elem_pointer != list_end(&(tcurrent->child_wait_sema)))
   {
-    i = list_entry(elem_pointer, struct wait_semaphore_elem, elem);
-    if(i->child_tid == child_tid && i->parent_tid == tcurrent->tid)
+    i = list_entry(elem_pointer , struct wait_semaphore_elem, elem);
+    if (i->child_tid == child_tid)
     {
-      success_find = true;
-      break;
+      sema_down(&i->semaphore);
+      list_remove(&i->elem);
+      intr_set_level(old_level);
+      return 0;
     }
     elem_pointer = list_next(elem_pointer);
   }
 
-  if (success_find)
-  {
-    sema_down(&i->semaphore);
-    list_remove(&i->elem);
-    return 0;
-  }
-  else
-    return -1;
+  intr_set_level(old_level);
+  return -1;
 }
 
 /* Free the current process's resources. */
@@ -165,25 +155,28 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  struct list_elem* elem_pointer = NULL;
+  struct wait_semaphore_elem* i = NULL;
 
-  struct list_elem* elem_pointer;
-  struct wait_semaphore_elem* i=NULL;
-  // wait_sema_list에서 해당되는 세마를 찾는다.
   bool success_find = false;
-  
-  elem_pointer = list_begin(&wait_sema_list);
-  while(elem_pointer != list_end(&wait_sema_list) && !list_empty(&wait_sema_list) && elem_pointer!=NULL)
+
+  if(tcurrent->tparent->tid == tcurrent->tid) return;
+
+  enum intr_level old_level = intr_disable();
+  elem_pointer = list_begin(&(tcurrent->tparent->child_wait_sema));
+  while (elem_pointer != list_end(&(tcurrent->tparent->child_wait_sema)))
   {
-    i = list_entry(elem_pointer, struct wait_semaphore_elem, elem);
-    if(i->child_tid == tcurrent->tid)
+    i = list_entry(elem_pointer , struct wait_semaphore_elem, elem);
+    if (i->child_tid == tcurrent->tid)
     {
-      success_find = true;
-      break;
+      sema_up(&i->semaphore);
+      intr_set_level(old_level);
+      return;
     }
     elem_pointer = list_next(elem_pointer);
   }
 
-  sema_up(&i->semaphore);
+  intr_set_level(old_level);
 }
 
 /* Sets up the CPU for running user code in the current

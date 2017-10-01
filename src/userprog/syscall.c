@@ -32,6 +32,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   switch(syscall_no)
   {
     case SYS_WRITE:
+      /*
       arg = *((int*)f->esp + 1);  // fd
       buffer = (const char*)* ((int*)f->esp + 2);
       if(!check_valid_pointer(buffer))
@@ -43,12 +44,15 @@ syscall_handler (struct intr_frame *f UNUSED)
       size = (int) *((int*)f->esp + 3);
       putbuf((const char*) buffer, (size_t) size);
       break;
+      */
     case SYS_HALT:
     case SYS_EXIT:
+      /*
       arg = *((int*)f->esp + 1);
       buffer = (const char*) tcurrent->name;
       printf("%s: exit(%d)\n", buffer, arg);
       thread_exit();
+      */
     case SYS_EXEC:
     case SYS_WAIT:
       arg = *((int*)f->esp + 1);  // pid
