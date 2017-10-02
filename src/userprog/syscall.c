@@ -49,7 +49,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_EXEC:
       buffer = (const char*)* ((int*)f->esp + 1);
-      if(check_valid_pointer(buffer))
+      if(check_valid_pointer((void*) buffer))
       {
         f->eax = process_execute(buffer);
       }
@@ -86,7 +86,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_REMOVE:
       buffer = (const char*)* ((int*)f->esp + 1);
-      if(check_valid_pointer(buffer))
+      if(check_valid_pointer((void*) buffer))
         f->eax = filesys_remove ((const char*)buffer);
       else
       {
@@ -194,7 +194,35 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
       break;
     case SYS_SEEK:
+      arg = (int*)f->esp + 1; // fd
+      size = (int*)f->esp + 2; //position
+      if(check_valid_pointer(arg) && check_valid_pointer(size))
+      {
+        f_elem = find_file(*arg);
+        if(f_elem != NULL)
+          file_seek(f_elem->f, (uint32_t) *size);
+      }
+      else
+      {
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
     case SYS_TELL:
+      arg = (int*)f->esp + 1; // fd
+      if(check_valid_pointer(arg))
+      {
+        f_elem = find_file(*arg);
+        if(f_elem != NULL)
+          f->eax = file_tell(f_elem->f);
+      }
+      else
+      {
+        f->eax = 0;
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
     case SYS_CLOSE:
       arg = (int*)f->esp + 1; // fd
       if(check_valid_pointer(arg))
