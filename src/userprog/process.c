@@ -161,9 +161,26 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
   struct list_elem* elem_pointer = NULL;
   struct wait_semaphore_elem* i = NULL;
+  struct file_elem* fi =NULL;
 
+  // struct thread의 file_list를 deallocate
+  /*
+  file_lock_acquire();
+  elem_pointer = list_begin(&(tcurrent->file_list));
+  while (elem_pointer != list_end(&(tcurrent->file_list)))
+  {
+    fi = list_entry(elem_pointer , struct file_elem, elem);
+    file_close(fi->f);
+    palloc_free_page(fi);
+    elem_pointer = list_next(elem_pointer);
+  }
+  file_lock_release();
+  */
+
+  // sema_up 시킬 세마를 찾는다.
   if(tcurrent->tparent->tid == tcurrent->tid) return;
 
   elem_pointer = list_begin(&(tcurrent->tparent->child_wait_sema));
@@ -283,6 +300,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   const char* delim = " ";
   char* fn_copy; 
 
+  file_lock_acquire();
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -397,6 +415,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+  file_lock_release();
   return success;
 }
 

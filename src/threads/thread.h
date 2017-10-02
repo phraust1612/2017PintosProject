@@ -182,4 +182,7 @@ bool less_wakeup_tick(struct list_elem* x, struct list_elem* y, void* aux UNUSED
 bool higher_priority (struct list_elem* x, struct list_elem* y, void* aux UNUSED);
 struct file_elem* find_file(int fd);
 
+void file_lock_acquire(void);
+void file_lock_release(void);
+
 #endif /* threads/thread.h */

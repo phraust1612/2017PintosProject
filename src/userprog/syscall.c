@@ -76,7 +76,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       size = (int*)f->esp+2;
       // return 값은 eax로 넘겨준다.
       if(check_valid_pointer((void*)buffer) && check_valid_pointer(size))
+      {
+        file_lock_acquire();
         f->eax = filesys_create((const char*)buffer, (int) *size);
+        file_lock_release();
+      }
       else
       {
         f->eax = false;
@@ -87,7 +91,11 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_REMOVE:
       buffer = (const char*)* ((int*)f->esp + 1);
       if(check_valid_pointer((void*) buffer))
+      {
+        file_lock_acquire();
         f->eax = filesys_remove ((const char*)buffer);
+        file_lock_release();
+      }
       else
       {
         f->eax = -1;
@@ -100,7 +108,9 @@ syscall_handler (struct intr_frame *f UNUSED)
       if(check_valid_pointer((void*)buffer))
       {
         f_elem = palloc_get_page(PAL_ZERO);
+        file_lock_acquire();
         f_elem->f = filesys_open((const char*)buffer);
+        file_lock_release();
         if(f_elem->f == NULL)
         {
           palloc_free_page(f_elem);
@@ -127,7 +137,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
         f_elem = find_file(*arg);
         if(f_elem != NULL)
+        {
+          file_lock_acquire();
           f->eax = (int) inode_length(file_get_inode(f_elem->f));
+          file_lock_release();
+        }
         else f->eax = 0;
       }
       else
@@ -150,7 +164,11 @@ syscall_handler (struct intr_frame *f UNUSED)
         {
           f_elem = find_file(*arg);
           if(f_elem != NULL)
+          {
+            file_lock_acquire();
             f->eax = file_read(f_elem->f, (void*)buffer, (int) *size);
+            file_lock_release();
+          }
           else
             f->eax = -1;
         }
@@ -182,7 +200,11 @@ syscall_handler (struct intr_frame *f UNUSED)
           if(f_elem == NULL)
             f->eax = 0;
           else
+          {
+            file_lock_acquire();
             f->eax = file_write (f_elem->f, (void*) buffer, (int) *size);
+            file_lock_release();
+          }
         }
       }
       // 올바르지 않은 argument를 받은 경우
@@ -200,7 +222,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
         f_elem = find_file(*arg);
         if(f_elem != NULL)
+        {
+          file_lock_acquire();
           file_seek(f_elem->f, (uint32_t) *size);
+          file_lock_release();
+        }
       }
       else
       {
@@ -214,7 +240,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
         f_elem = find_file(*arg);
         if(f_elem != NULL)
+        {
+          file_lock_acquire();
           f->eax = file_tell(f_elem->f);
+          file_lock_release();
+        }
       }
       else
       {
@@ -230,9 +260,11 @@ syscall_handler (struct intr_frame *f UNUSED)
         f_elem = find_file(*arg);
         if(f_elem != NULL)
         {
+          file_lock_acquire();
           file_close((struct file*) f_elem->f);
           list_remove(&f_elem->elem);
           palloc_free_page(f_elem);
+          file_lock_release();
         }
       }
       else

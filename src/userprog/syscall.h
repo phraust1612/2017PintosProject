@@ -9,6 +9,7 @@
 #include "filesys/inode.h"
 #include "devices/input.h"
 
+void file_lock_init(void);
 void syscall_init (void);
 
 #endif /* userprog/syscall.h */

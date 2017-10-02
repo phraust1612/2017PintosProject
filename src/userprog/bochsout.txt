@@ -30,7 +30,7 @@
 00000000000i[     ]   SB16 support: no
 00000000000i[     ]   USB support: no
 00000000000i[     ]   VGA extension support:  
-00000000000i[MEM0 ] allocated memory at 0x7f5d1e429010. after alignment, vector=0x7f5d1e42a000
+00000000000i[MEM0 ] allocated memory at 0x7f60abfd5010. after alignment, vector=0x7f60abfd6000
 00000000000i[MEM0 ] 4.00MB
 00000000000i[MEM0 ] rom at 0xf0000/65536 ('/usr/local/share/bochs/BIOS-bochs-latest')
 00000000000i[MEM0 ] rom at 0xc0000/32768 ('/usr/local/share/bochs/VGABIOS-lgpl-latest')
@@ -46,9 +46,9 @@
 00000000000i[     ] init_mem of 'extfpuirq' plugin device by virtual method
 00000000000i[     ] init_mem of 'speaker' plugin device by virtual method
 00000000000i[     ] init_dev of 'harddrv' plugin device by virtual method
-00000000000i[HD   ] HD on ata0-0: '/tmp/XxplHD3WFg.dsk' 'flat' mode 
-00000000000i[HD   ] HD on ata0-1: '/tmp/lfHGnB5gUo.dsk' 'flat' mode 
-00000000000i[HD   ] HD on ata1-0: '/tmp/jDiDp2I83M.dsk' 'flat' mode 
+00000000000i[HD   ] HD on ata0-0: '/tmp/4v83xBEcRZ.dsk' 'flat' mode 
+00000000000i[HD   ] HD on ata0-1: '/tmp/fVQJx8BTVA.dsk' 'flat' mode 
+00000000000i[HD   ] HD on ata1-0: '/tmp/T3POxFp1bU.dsk' 'flat' mode 
 00000000000i[HD   ] Using boot sequence disk, none, none
 00000000000i[HD   ] Floppy boot signature check is enabled
 00000000000i[     ] init_dev of 'keyboard' plugin device by virtual method
@@ -67,35 +67,6 @@
 00000000000i[     ] reset of 'parallel' plugin device by virtual method
 00000000000i[     ] reset of 'extfpuirq' plugin device by virtual method
 00000000000i[     ] reset of 'speaker' plugin device by virtual method
-00000000000i[     ] addr fff0 len 8
-00000000000i[     ] addr fff0 len 7
-00000000000i[     ] addr c01095f6 len 1
-00000000000i[     ] addr c01095f6 len 1
-00000000000i[     ] addr c01095f6 len 1
-00000000000i[     ] addr c01095f6 len 1
-00000000000i[     ] addr c01095f6 len a
-00000000000i[     ] addr c01095f6 len 1
-00000000000i[     ] addr c01095f6 len 1
-00000000000i[     ] addr c0109570 len 1
-00000000000i[     ] addr c0109570 len 1
-00000000000i[     ] addr c0109570 len 1
-00000000000i[     ] addr c0109570 len 1
-00000000000i[     ] addr c0109570 len a
-00000000000i[     ] addr c0109570 len 1
-00000000000i[     ] addr c0109570 len 1
-00000000000i[     ] addr c0109669 len 1
-00000000000i[     ] addr c0109669 len 1
-00000000000i[     ] addr c0109669 len 1
-00000000000i[     ] addr c0109669 len 1
-00000000000i[     ] addr c0109669 len a
-00000000000i[     ] addr c0109669 len 1
-00000000000i[     ] addr c0109669 len 1
-00000000000i[     ] setting breakpoint at c0100000
-00000000000i[     ] setting breakpoint at c010abdd
-00000000000i[     ] setting breakpoint at c010ac72
-00000000000i[     ] setting breakpoint at c01095f6
-00000000000i[     ] setting breakpoint at c0109570
-00000000000i[     ] setting breakpoint at c0109669
 00000003740i[BIOS ] $Revision: 1.160 $ $Date: 2006/01/25 17:51:49 $
 00000317563i[KBD  ] reset-disable command received
 00000425250i[VBIOS] VGABios $Id: vgabios.c,v 1.63 2005/12/26 19:50:26 vruppert Exp $
@@ -104,341 +75,29 @@
 00000793268i[BIOS ] ata0-1: PCHS=4/16/63 translation=none LCHS=4/16/63
 00000848672i[BIOS ] ata1-0: PCHS=1/16/63 translation=none LCHS=1/16/63
 00000897373e[HD   ] ata1: device set to 1 which does not exist
-00001029416i[     ] found breakpoint at c0100000
-00001029416i[     ] stopped with ac1
-00001029416i[     ] reg 8 set to c0100000
-00001029416i[     ] reg 41 set to ffffffff
-00001029416i[     ] Removing breakpoint at c0100000
-00001029416i[     ] Removing breakpoint at c010abdd
-00001029416i[     ] Removing breakpoint at c010ac72
-00001029416i[     ] Removing breakpoint at c01095f6
-00001029416i[     ] Removing breakpoint at c0109570
-00001029416i[     ] Removing breakpoint at c0109669
-00001029416i[     ] stepping
-00001029417i[     ] stopped with ac2
-00001029417i[     ] setting breakpoint at c0100000
-00001029417i[     ] setting breakpoint at c010abdd
-00001029417i[     ] setting breakpoint at c010ac72
-00001029417i[     ] setting breakpoint at c01095f6
-00001029417i[     ] setting breakpoint at c0109570
-00001029417i[     ] setting breakpoint at c0109669
-00001872775e[HD   ] ata1: device set to 1 which does not exist
-00002016659e[HD   ] ata1: device set to 1 which does not exist
-00004582723i[     ] found breakpoint at c0109669
-00004582723i[     ] stopped with ac1
-00004582723i[     ] reg 8 set to c0109669
-00004582723i[     ] reg 41 set to ffffffff
-00004582723i[     ] Removing breakpoint at c0100000
-00004582723i[     ] Removing breakpoint at c010abdd
-00004582723i[     ] Removing breakpoint at c010ac72
-00004582723i[     ] Removing breakpoint at c01095f6
-00004582723i[     ] Removing breakpoint at c0109570
-00004582723i[     ] Removing breakpoint at c0109669
-00004582723i[     ] addr c002ff70 len 4
-00004582723i[     ] addr c0007da9 len 8
-00004582723i[     ] addr c0007db1 len 8
-00004582723i[     ] stepping
-00004582724i[     ] stopped with ac2
-00004582724i[     ] setting breakpoint at c0100000
-00004582724i[     ] setting breakpoint at c010abdd
-00004582724i[     ] setting breakpoint at c010ac72
-00004582724i[     ] setting breakpoint at c01095f6
-00004582724i[     ] setting breakpoint at c0109570
-00004582724i[     ] setting breakpoint at c0109669
-00004996352i[     ] found breakpoint at c01095f6
-00004996352i[     ] stopped with ac1
-00004996352i[     ] reg 8 set to c01095f6
-00004996352i[     ] reg 41 set to ffffffff
-00004996352i[     ] Removing breakpoint at c0100000
-00004996352i[     ] Removing breakpoint at c010abdd
-00004996352i[     ] Removing breakpoint at c010ac72
-00004996352i[     ] Removing breakpoint at c01095f6
-00004996352i[     ] Removing breakpoint at c0109570
-00004996352i[     ] Removing breakpoint at c0109669
-00004996352i[     ] addr c002ff70 len 4
-00004996352i[     ] stepping
-00004996353i[     ] stopped with ac2
-00004996353i[     ] setting breakpoint at c0100000
-00004996353i[     ] setting breakpoint at c010abdd
-00004996353i[     ] setting breakpoint at c010ac72
-00004996353i[     ] setting breakpoint at c01095f6
-00004996353i[     ] setting breakpoint at c0109570
-00004996353i[     ] setting breakpoint at c0109669
-00005032090i[     ] found breakpoint at c0109669
-00005032090i[     ] stopped with ac1
-00005032090i[     ] reg 8 set to c0109669
-00005032090i[     ] reg 41 set to ffffffff
-00005032090i[     ] Removing breakpoint at c0100000
-00005032090i[     ] Removing breakpoint at c010abdd
-00005032090i[     ] Removing breakpoint at c010ac72
-00005032090i[     ] Removing breakpoint at c01095f6
-00005032090i[     ] Removing breakpoint at c0109570
-00005032090i[     ] Removing breakpoint at c0109669
-00005032090i[     ] addr c011cf3c len 4
-00005032090i[     ] addr 804a69e len 8
-00005032090i[     ] addr 804a6a6 len 8
-00005032090i[     ] stepping
-00005032091i[     ] stopped with ac2
-00005032091i[     ] setting breakpoint at c0100000
-00005032091i[     ] setting breakpoint at c010abdd
-00005032091i[     ] setting breakpoint at c010ac72
-00005032091i[     ] setting breakpoint at c01095f6
-00005032091i[     ] setting breakpoint at c0109570
-00005032091i[     ] setting breakpoint at c0109669
-00005476041i[     ] found breakpoint at c010ac72
-00005476041i[     ] stopped with ac1
-00005476041i[     ] reg 8 set to c010ac72
-00005476041i[     ] reg 41 set to ffffffff
-00005476041i[     ] Removing breakpoint at c0100000
-00005476041i[     ] Removing breakpoint at c010abdd
-00005476041i[     ] Removing breakpoint at c010ac72
-00005476041i[     ] Removing breakpoint at c01095f6
-00005476041i[     ] Removing breakpoint at c0109570
-00005476041i[     ] Removing breakpoint at c0109669
-00005476041i[     ] stepping
-00005476042i[     ] stopped with ac2
-00005476042i[     ] addr bfffffa4 len 4
-00005476042i[     ] setting breakpoint at c0100000
-00005476042i[     ] setting breakpoint at c010abdd
-00005476042i[     ] setting breakpoint at c010ac72
-00005476042i[     ] setting breakpoint at c01095f6
-00005476042i[     ] setting breakpoint at c0109570
-00005476042i[     ] setting breakpoint at c0109669
-00005476042i[     ] stepping
-00005476043i[     ] stopped with ac2
-00005476043i[     ] stepping
-00005476044i[     ] stopped with ac2
-00005476044i[     ] addr c011cf38 len 4
-00005476044i[     ] setting breakpoint at c010ac7d
-00005476158i[     ] found breakpoint at c010ac7d
-00005476158i[     ] stopped with ac1
-00005476158i[     ] reg 8 set to c010ac7d
-00005476158i[     ] reg 41 set to ffffffff
-00005476158i[     ] Removing breakpoint at c010ac7d
-00005476158i[     ] stepping
-00005476159i[     ] stopped with ac2
-00005476159i[     ] stepping
-00005476160i[     ] stopped with ac2
-00005476160i[     ] Removing breakpoint at c0100000
-00005476160i[     ] Removing breakpoint at c010abdd
-00005476160i[     ] Removing breakpoint at c010ac72
-00005476160i[     ] Removing breakpoint at c01095f6
-00005476160i[     ] Removing breakpoint at c0109570
-00005476160i[     ] Removing breakpoint at c0109669
-00005476160i[     ] setting breakpoint at c0100000
-00005476160i[     ] setting breakpoint at c010abdd
-00005476160i[     ] setting breakpoint at c010ac72
-00005476160i[     ] setting breakpoint at c01095f6
-00005476160i[     ] setting breakpoint at c0109570
-00005476160i[     ] setting breakpoint at c0109669
-00005476160i[     ] stepping
-00005476161i[     ] stopped with ac2
-00005476161i[     ] stepping
-00005476162i[     ] stopped with ac2
-00005476162i[     ] stepping
-00005476163i[     ] stopped with ac2
-00005476163i[     ] Removing breakpoint at c0100000
-00005476163i[     ] Removing breakpoint at c010abdd
-00005476163i[     ] Removing breakpoint at c010ac72
-00005476163i[     ] Removing breakpoint at c01095f6
-00005476163i[     ] Removing breakpoint at c0109570
-00005476163i[     ] Removing breakpoint at c0109669
-00005476163i[     ] addr c011cf3c len 4
-00005476163i[     ] stepping
-00005476164i[     ] stopped with ac2
-00005476164i[     ] setting breakpoint at c0100000
-00005476164i[     ] setting breakpoint at c010abdd
-00005476164i[     ] setting breakpoint at c010ac72
-00005476164i[     ] setting breakpoint at c01095f6
-00005476164i[     ] setting breakpoint at c0109570
-00005476164i[     ] setting breakpoint at c0109669
-00005476164i[     ] stepping
-00005476165i[     ] stopped with ac2
-00005476165i[     ] stepping
-00005476166i[     ] stopped with ac2
-00005476166i[     ] stepping
-00005476167i[     ] stopped with ac2
-00005476167i[     ] stepping
-00005476168i[     ] stopped with ac2
-00005476168i[     ] stepping
-00005476169i[     ] stopped with ac2
-00005476169i[     ] stepping
-00005476170i[     ] stopped with ac2
-00005476170i[     ] Removing breakpoint at c0100000
-00005476170i[     ] Removing breakpoint at c010abdd
-00005476170i[     ] Removing breakpoint at c010ac72
-00005476170i[     ] Removing breakpoint at c01095f6
-00005476170i[     ] Removing breakpoint at c0109570
-00005476170i[     ] Removing breakpoint at c0109669
-00005476170i[     ] setting breakpoint at c0100000
-00005476170i[     ] setting breakpoint at c010abdd
-00005476170i[     ] setting breakpoint at c010ac72
-00005476170i[     ] setting breakpoint at c01095f6
-00005476170i[     ] setting breakpoint at c0109570
-00005476170i[     ] setting breakpoint at c0109669
-00005476170i[     ] stepping
-00005476171i[     ] stopped with ac2
-00005476171i[     ] addr c011cf18 len 4
-00005476171i[     ] setting breakpoint at c0109607
-00005476204i[     ] found breakpoint at c0109607
-00005476204i[     ] stopped with ac1
-00005476204i[     ] reg 8 set to c0109607
-00005476204i[     ] reg 41 set to ffffffff
-00005476204i[     ] Removing breakpoint at c0109607
-00005476204i[     ] stepping
-00005476205i[     ] stopped with ac2
-00005476205i[     ] Removing breakpoint at c0100000
-00005476205i[     ] Removing breakpoint at c010abdd
-00005476205i[     ] Removing breakpoint at c010ac72
-00005476205i[     ] Removing breakpoint at c01095f6
-00005476205i[     ] Removing breakpoint at c0109570
-00005476205i[     ] Removing breakpoint at c0109669
-00005476205i[     ] setting breakpoint at c0100000
-00005476205i[     ] setting breakpoint at c010abdd
-00005476205i[     ] setting breakpoint at c010ac72
-00005476205i[     ] setting breakpoint at c01095f6
-00005476205i[     ] setting breakpoint at c0109570
-00005476205i[     ] setting breakpoint at c0109669
-00005476205i[     ] stepping
-00005476206i[     ] stopped with ac2
-00005476206i[     ] stepping
-00005476207i[     ] stopped with ac2
-00005476207i[     ] stepping
-00005476208i[     ] stopped with ac2
-00005476208i[     ] stepping
-00005476209i[     ] stopped with ac2
-00005476209i[     ] addr c011cf18 len 4
-00005476209i[     ] setting breakpoint at c0109617
-00005476218i[     ] found breakpoint at c0109617
-00005476218i[     ] stopped with ac1
-00005476218i[     ] reg 8 set to c0109617
-00005476218i[     ] reg 41 set to ffffffff
-00005476218i[     ] Removing breakpoint at c0109617
-00005476218i[     ] stepping
-00005476219i[     ] stopped with ac2
-00005476219i[     ] stepping
-00005476220i[     ] stopped with ac2
-00005476220i[     ] Removing breakpoint at c0100000
-00005476220i[     ] Removing breakpoint at c010abdd
-00005476220i[     ] Removing breakpoint at c010ac72
-00005476220i[     ] Removing breakpoint at c01095f6
-00005476220i[     ] Removing breakpoint at c0109570
-00005476220i[     ] Removing breakpoint at c0109669
-00005476220i[     ] setting breakpoint at c0100000
-00005476220i[     ] setting breakpoint at c010abdd
-00005476220i[     ] setting breakpoint at c010ac72
-00005476220i[     ] setting breakpoint at c01095f6
-00005476220i[     ] setting breakpoint at c0109570
-00005476220i[     ] setting breakpoint at c0109669
-00005476220i[     ] stepping
-00005476221i[     ] stopped with ac2
-00005476221i[     ] stepping
-00005476222i[     ] stopped with ac2
-00005476222i[     ] addr c011cf18 len 4
-00005476222i[     ] setting breakpoint at c0109658
-00005476231i[     ] found breakpoint at c0109658
-00005476231i[     ] stopped with ac1
-00005476231i[     ] reg 8 set to c0109658
-00005476231i[     ] reg 41 set to ffffffff
-00005476231i[     ] Removing breakpoint at c0109658
-00005476231i[     ] stepping
-00005476232i[     ] stopped with ac2
-00005476232i[     ] stepping
-00005476233i[     ] stopped with ac2
-00005476233i[     ] Removing breakpoint at c0100000
-00005476233i[     ] Removing breakpoint at c010abdd
-00005476233i[     ] Removing breakpoint at c010ac72
-00005476233i[     ] Removing breakpoint at c01095f6
-00005476233i[     ] Removing breakpoint at c0109570
-00005476233i[     ] Removing breakpoint at c0109669
-00005476233i[     ] setting breakpoint at c0100000
-00005476233i[     ] setting breakpoint at c010abdd
-00005476233i[     ] setting breakpoint at c010ac72
-00005476233i[     ] setting breakpoint at c01095f6
-00005476233i[     ] setting breakpoint at c0109570
-00005476233i[     ] setting breakpoint at c0109669
-00005476233i[     ] stepping
-00005476234i[     ] stopped with ac2
-00005476234i[     ] stepping
-00005476235i[     ] stopped with ac2
-00005476235i[     ] Removing breakpoint at c0100000
-00005476235i[     ] Removing breakpoint at c010abdd
-00005476235i[     ] Removing breakpoint at c010ac72
-00005476235i[     ] Removing breakpoint at c01095f6
-00005476235i[     ] Removing breakpoint at c0109570
-00005476235i[     ] Removing breakpoint at c0109669
-00005476235i[     ] setting breakpoint at c0100000
-00005476235i[     ] setting breakpoint at c010abdd
-00005476235i[     ] setting breakpoint at c010ac72
-00005476235i[     ] setting breakpoint at c01095f6
-00005476235i[     ] setting breakpoint at c0109570
-00005476235i[     ] setting breakpoint at c0109669
-00005476235i[     ] stepping
-00005476236i[     ] stopped with ac2
-00005476236i[     ] stepping
-00005476237i[     ] stopped with ac2
-00005476237i[     ] stepping
-00005476238i[     ] stopped with ac2
-00005476238i[     ] addr c011cf18 len 4
-00005476238i[     ] setting breakpoint at c010962b
-00005498357i[     ] found breakpoint at c010abdd
-00005498357i[     ] stopped with ac1
-00005498357i[     ] reg 8 set to c010abdd
-00005498357i[     ] reg 41 set to ffffffff
-00005498357i[     ] Removing breakpoint at c010962b
-00005498357i[     ] Removing breakpoint at c0100000
-00005498357i[     ] Removing breakpoint at c010abdd
-00005498357i[     ] Removing breakpoint at c010ac72
-00005498357i[     ] Removing breakpoint at c01095f6
-00005498357i[     ] Removing breakpoint at c0109570
-00005498357i[     ] Removing breakpoint at c0109669
-00005498357i[     ] stepping
-00005498358i[     ] stopped with ac2
-00005498358i[     ] addr bfffffac len 4
-00005498358i[     ] setting breakpoint at c0100000
-00005498358i[     ] setting breakpoint at c010abdd
-00005498358i[     ] setting breakpoint at c010ac72
-00005498358i[     ] setting breakpoint at c01095f6
-00005498358i[     ] setting breakpoint at c0109570
-00005498358i[     ] setting breakpoint at c0109669
-00005498358i[     ] stepping
-00005498359i[     ] stopped with ac2
-00005498359i[     ] Removing breakpoint at c0100000
-00005498359i[     ] Removing breakpoint at c010abdd
-00005498359i[     ] Removing breakpoint at c010ac72
-00005498359i[     ] Removing breakpoint at c01095f6
-00005498359i[     ] Removing breakpoint at c0109570
-00005498359i[     ] Removing breakpoint at c0109669
-00005498359i[     ] setting breakpoint at c0100000
-00005498359i[     ] setting breakpoint at c010abdd
-00005498359i[     ] setting breakpoint at c010ac72
-00005498359i[     ] setting breakpoint at c01095f6
-00005498359i[     ] setting breakpoint at c0109570
-00005498359i[     ] setting breakpoint at c0109669
-00005498359i[     ] stepping
-00005498360i[     ] stopped with ac2
-00005498360i[     ] stepping
-00005498361i[     ] stopped with ac2
-00005498361i[     ] addr c0122f38 len 4
-00005498361i[     ] setting breakpoint at c010abeb
-00005498475i[     ] found breakpoint at c010abeb
-00005498475i[     ] stopped with ac1
-00005498475i[     ] reg 8 set to c010abeb
-00005498475i[     ] reg 41 set to ffffffff
-00005498475i[     ] Removing breakpoint at c010abeb
-00005498475i[     ] stepping
-00005498476i[     ] stopped with ac2
-00005498476i[     ] stepping
-00005498477i[     ] stopped with ac2
-00005498477i[     ] Removing breakpoint at c0100000
-00005498477i[     ] Removing breakpoint at c010abdd
-00005498477i[     ] Removing breakpoint at c010ac72
-00005498477i[     ] Removing breakpoint at c01095f6
-00005498477i[     ] Removing breakpoint at c0109570
-00005498477i[     ] Removing breakpoint at c0109669
-00005498477i[     ] addr c0122008 len 10
-00005498477p[     ] >>PANIC<< SIGNAL 2 caught
-00005498477i[SYS  ] Last time is 5
-00005498477i[NGUI ] bx_nogui_gui_c::exit() not implemented yet.
-00005498477i[     ] restoring default signal behavior
-00005498477i[CTRL ] quit_sim called with exit code 1
+00001872193e[HD   ] ata1: device set to 1 which does not exist
+00002016077e[HD   ] ata1: device set to 1 which does not exist
+00016995442p[UNMP ] >>PANIC<< Shutdown port: shutdown requested
+00016995442i[SYS  ] Last time is 16
+00016995442i[NGUI ] bx_nogui_gui_c::exit() not implemented yet.
+00016995442i[CPU  ] protected mode
+00016995442i[CPU  ] CS.d_b = 32 bit
+00016995442i[CPU  ] SS.d_b = 32 bit
+00016995442i[CPU  ] | EAX=0000006e  EBX=c010cf40  ECX=c002ff86  EDX=ffff8900
+00016995442i[CPU  ] | ESP=c002ff70  EBP=c002ff88  ESI=00000000  EDI=c010e445
+00016995442i[CPU  ] | IOPL=0 id vip vif ac vm rf nt of df IF tf sf zf af pf cf
+00016995442i[CPU  ] | SEG selector     base    limit G D
+00016995442i[CPU  ] | SEG sltr(index|ti|rpl)     base    limit G D
+00016995442i[CPU  ] |  CS:0008( 0001| 0|  0) 00000000 000fffff 1 1
+00016995442i[CPU  ] |  DS:0010( 0002| 0|  0) 00000000 000fffff 1 1
+00016995442i[CPU  ] |  SS:0010( 0002| 0|  0) 00000000 000fffff 1 1
+00016995442i[CPU  ] |  ES:0010( 0002| 0|  0) 00000000 000fffff 1 1
+00016995442i[CPU  ] |  FS:0023( 0004| 0|  3) 00000000 000fffff 1 1
+00016995442i[CPU  ] |  GS:0023( 0004| 0|  3) 00000000 000fffff 1 1
+00016995442i[CPU  ] | EIP=c0100077 (c0100076)
+00016995442i[CPU  ] | CR0=0x80010015 CR1=0 CR2=0x00000000
+00016995442i[CPU  ] | CR3=0x00113000 CR4=0x00000000
+00016995442i[CPU  ] >> ee
+00016995442i[CPU  ] >> : out dx, al
+00016995442i[     ] restoring default signal behavior
+00016995442i[CTRL ] quit_sim called with exit code 1
