@@ -29,21 +29,31 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
+  // file_name을 직접 strtok_r하면 코드섹션에서 왔을 수도
+  // 있는 *file_name을 건드릴 수 있다.
+  // 따라서 한 번 더 페이지를 할당해서 복사해서 쓴다.
+  char *fn_copy2;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
+  fn_copy2 = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy2, file_name, PGSIZE);
 
-  char* dummy;
-  file_name = strtok_r((char*) file_name, " ", &dummy);
+  char** dummy = palloc_get_page(PAL_ZERO);
+  const char* delim = " ";
+  file_name = strtok_r((char*) fn_copy2, delim, dummy);
+  palloc_free_page(dummy);
 
   struct thread* tcurrent = thread_current();
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  sema_down(&tcurrent->creation_sema);
+  palloc_free_page (fn_copy2);
  
   // wait_sema 를 여기서 지역변수로 선언하면 struct thread* 도중의 커널 스택 영역에 할당될 수 있어
   // 스택이 지나가면서 훼손될 우려가 있다. 따라서 별도의 페이지를 할당해서 만들어줘야 한다.
@@ -55,7 +65,8 @@ process_execute (const char *file_name)
   list_push_back(&tcurrent->child_wait_sema, &wait_sema->elem);
 
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
+  if (!tcurrent->child_success) return -1;
   return tid;
 }
 
@@ -67,6 +78,7 @@ start_process (void *f_name)
   char *file_name = f_name;
   struct intr_frame if_;
   bool success;
+  struct thread* tcurrent = thread_current();
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -74,6 +86,8 @@ start_process (void *f_name)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  tcurrent->tparent->child_success = success;
+  sema_up(&tcurrent->tparent->creation_sema);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -116,7 +130,7 @@ process_wait (tid_t child_tid UNUSED)
       sema_down(&i->semaphore);
       list_remove(&i->elem);
       palloc_free_page(i);
-      return 0;
+      return tcurrent->child_exit_status;
     }
     elem_pointer = list_next(elem_pointer);
   }
@@ -163,6 +177,8 @@ process_exit (void)
     }
     elem_pointer = list_next(elem_pointer);
   }
+
+  return;
 }
 
 /* Sets up the CPU for running user code in the current
@@ -263,7 +279,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
-  char* dummy;
+  char** dummy;
+  const char* delim = " ";
   char* fn_copy; 
 
   /* Allocate and activate page directory. */
@@ -277,7 +294,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
   /* Open executable file. */
-  file_name = strtok_r((char*) file_name, " ", &dummy);
+  dummy = palloc_get_page(PAL_ZERO);
+  file_name = strtok_r((char*) file_name, delim, dummy);
+  palloc_free_page(dummy);
   file = filesys_open (file_name);
 
   if (file == NULL) 

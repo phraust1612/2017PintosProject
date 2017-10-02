@@ -2,6 +2,8 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "threads/palloc.h"
+
 void init_wait_sema_list(void);
 
 tid_t process_execute (const char *file_name);

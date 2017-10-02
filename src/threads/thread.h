@@ -118,13 +118,18 @@ struct thread
     struct lock* plock_acq;
     int origin_priority;
 
+    struct semaphore creation_sema;
+
     struct list child_wait_sema;
     struct thread* tparent;
+    bool child_success;
 
     // struct file* 와 대응하는 file descriptor(int)의 리스트
     struct list file_list;
     // 다음 할당될 fd
     int next_fd;
+
+    int child_exit_status;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

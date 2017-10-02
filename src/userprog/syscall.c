@@ -41,13 +41,35 @@ syscall_handler (struct intr_frame *f UNUSED)
       if(!check_valid_pointer(arg))
         printf("%s: exit(%d)\n", buffer, -1);
       else
+      {
+        tcurrent->tparent->child_exit_status = *arg;
         printf("%s: exit(%d)\n", buffer, (int) *arg);
+      }
       thread_exit();
       break;
     case SYS_EXEC:
+      buffer = (const char*)* ((int*)f->esp + 1);
+      if(check_valid_pointer(buffer))
+      {
+        f->eax = process_execute(buffer);
+      }
+      else
+      {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
     case SYS_WAIT:
-      arg = (int*)f->esp + 1;  // pid
-      process_wait((tid_t) *arg);
+      arg = (int*)f->esp + 1;  // 
+      if(check_valid_pointer(arg))
+        f->eax = process_wait((tid_t) *arg);
+      else
+      {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
       break;
     case SYS_CREATE:
       buffer = (const char*)* ((int*)f->esp + 1);
@@ -63,6 +85,16 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
       break;
     case SYS_REMOVE:
+      buffer = (const char*)* ((int*)f->esp + 1);
+      if(check_valid_pointer(buffer))
+        f->eax = filesys_remove ((const char*)buffer);
+      else
+      {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
     case SYS_OPEN:
       buffer = (const char*)* ((int*)f->esp + 1);
       if(check_valid_pointer((void*)buffer))

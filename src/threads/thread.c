@@ -526,6 +526,7 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (name != NULL);
 
   memset (t, 0, sizeof *t);
+  t->child_exit_status = -1;
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
@@ -536,6 +537,8 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->lock_own_list);
   t->tparent = running_thread();
   t->next_fd = 2;
+  t->child_success = false;
+  sema_init(&t->creation_sema,0);
   list_init(&t->file_list);
   list_init(&t->child_wait_sema);
   initial_thread->wakeup_tick = 0;
