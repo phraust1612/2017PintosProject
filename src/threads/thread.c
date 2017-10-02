@@ -497,6 +497,25 @@ is_thread (struct thread *t)
   return t != NULL && t->magic == THREAD_MAGIC;
 }
 
+
+/* returns true if child_tid is child of current thread */
+bool
+is_child (tid_t child_tid)
+{
+  struct list_elem* elem_pointer = NULL;
+  struct wait_semaphore_elem* i = NULL;
+  struct thread* tcurrent = thread_current();
+  
+  elem_pointer = list_begin(&(tcurrent->child_wait_sema));
+  while (elem_pointer != list_end(&tcurrent->child_wait_sema))
+  {
+    i = list_entry(elem_pointer, struct wait_semaphore_elem, elem);
+    if (i->child_tid == child_tid) return true;
+    elem_pointer = list_next(elem_pointer);
+  }
+  return false;
+}
+
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
@@ -516,6 +535,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->plock_acq = NULL;
   list_init(&t->lock_own_list);
   t->tparent = running_thread();
+  t->next_fd = 2;
+  list_init(&t->file_list);
   list_init(&t->child_wait_sema);
   initial_thread->wakeup_tick = 0;
 }
@@ -648,4 +669,22 @@ bool higher_priority (struct list_elem* x, struct list_elem* y, void* aux UNUSED
   struct thread* tmpy = list_entry(y, struct thread, elem);
   if (tmpx->priority > tmpy->priority) return true;
   else return false;
+}
+
+/* return file_elem* with given fd */
+struct file_elem*
+find_file (int fd)
+{
+  struct list_elem* elem_pointer = NULL;
+  struct file_elem* i = NULL;
+  struct thread* tcurrent = thread_current();
+  
+  elem_pointer = list_begin(&(tcurrent->file_list));
+  while (elem_pointer != list_end(&tcurrent->file_list))
+  {
+    i = list_entry(elem_pointer, struct file_elem, elem);
+    if (i->fd == fd) return i;
+    elem_pointer = list_next(elem_pointer);
+  }
+  return NULL;
 }

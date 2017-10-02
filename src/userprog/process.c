@@ -18,13 +18,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-struct wait_semaphore_elem 
-  {
-    struct list_elem elem;              /* List element. */
-    struct semaphore semaphore;         /* This semaphore. */
-    tid_t child_tid;
-  };
-
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -51,12 +44,15 @@ process_execute (const char *file_name)
   struct thread* tcurrent = thread_current();
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  enum intr_level old_level = intr_disable();
-  struct wait_semaphore_elem wait_sema;
-  wait_sema.child_tid = tid;
-  sema_init(&wait_sema.semaphore, 0);
-  list_push_back(&tcurrent->child_wait_sema, &wait_sema.elem);
-  intr_set_level(old_level);
+ 
+  // wait_sema 를 여기서 지역변수로 선언하면 struct thread* 도중의 커널 스택 영역에 할당될 수 있어
+  // 스택이 지나가면서 훼손될 우려가 있다. 따라서 별도의 페이지를 할당해서 만들어줘야 한다.
+  struct wait_semaphore_elem* wait_sema;
+  wait_sema = palloc_get_page (0);
+
+  wait_sema->child_tid = tid;
+  sema_init(&wait_sema->semaphore, 0);
+  list_push_back(&tcurrent->child_wait_sema, &wait_sema->elem);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -71,7 +67,6 @@ start_process (void *f_name)
   char *file_name = f_name;
   struct intr_frame if_;
   bool success;
-  struct thread* tcurrent = thread_current();
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -107,11 +102,9 @@ start_process (void *f_name)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  enum intr_level old_level = intr_disable();
   struct list_elem* elem_pointer = NULL;
   struct wait_semaphore_elem* i = NULL;
 
-  bool success_find = false;
   struct thread* tcurrent = thread_current();
 
   elem_pointer = list_begin(&(tcurrent->child_wait_sema));
@@ -122,13 +115,12 @@ process_wait (tid_t child_tid UNUSED)
     {
       sema_down(&i->semaphore);
       list_remove(&i->elem);
-      intr_set_level(old_level);
+      palloc_free_page(i);
       return 0;
     }
     elem_pointer = list_next(elem_pointer);
   }
 
-  intr_set_level(old_level);
   return -1;
 }
 
@@ -158,11 +150,8 @@ process_exit (void)
   struct list_elem* elem_pointer = NULL;
   struct wait_semaphore_elem* i = NULL;
 
-  bool success_find = false;
-
   if(tcurrent->tparent->tid == tcurrent->tid) return;
 
-  enum intr_level old_level = intr_disable();
   elem_pointer = list_begin(&(tcurrent->tparent->child_wait_sema));
   while (elem_pointer != list_end(&(tcurrent->tparent->child_wait_sema)))
   {
@@ -170,13 +159,10 @@ process_exit (void)
     if (i->child_tid == tcurrent->tid)
     {
       sema_up(&i->semaphore);
-      intr_set_level(old_level);
       return;
     }
     elem_pointer = list_next(elem_pointer);
   }
-
-  intr_set_level(old_level);
 }
 
 /* Sets up the CPU for running user code in the current

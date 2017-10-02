@@ -23,6 +23,20 @@ enum thread_status
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
+struct wait_semaphore_elem 
+  {
+    struct list_elem elem;              /* List element. */
+    struct semaphore semaphore;         /* This semaphore. */
+    tid_t child_tid;
+  };
+
+struct file_elem
+{
+  struct list_elem elem;
+  struct file* f;
+  int fd;
+};
+
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
@@ -106,6 +120,12 @@ struct thread
 
     struct list child_wait_sema;
     struct thread* tparent;
+
+    // struct file* 와 대응하는 file descriptor(int)의 리스트
+    struct list file_list;
+    // 다음 할당될 fd
+    int next_fd;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -149,10 +169,12 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 static bool is_thread (struct thread *) UNUSED;
+bool is_child(tid_t child_tid);
 
 // less_wakeup_tick
 // return true if x has less wakeup_tick than y
 bool less_wakeup_tick(struct list_elem* x, struct list_elem* y, void* aux UNUSED);
 bool higher_priority (struct list_elem* x, struct list_elem* y, void* aux UNUSED);
+struct file_elem* find_file(int fd);
 
 #endif /* threads/thread.h */
