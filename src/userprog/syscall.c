@@ -110,6 +110,11 @@ syscall_handler (struct intr_frame *f UNUSED)
       if(check_valid_pointer((void*)buffer))
       {
         f_elem = palloc_get_page(PAL_ZERO);
+        if(f_elem == NULL)
+        {
+          f->eax = -1;
+          break;
+        }
         file_lock_acquire();
         f_elem->f = filesys_open((const char*)buffer);
         file_lock_release();

@@ -43,15 +43,15 @@ process_execute (const char *file_name)
   fn_copy2 = palloc_get_page (0);
   if (fn_copy2 == NULL)
   {
-    //TODO
+    palloc_free_page(fn_copy);
+    return TID_ERROR;
   }
   strlcpy (fn_copy, file_name, PGSIZE);
   strlcpy (fn_copy2, file_name, PGSIZE);
 
-  char** dummy = palloc_get_page(PAL_ZERO);
+  char dummy[200];
   const char* delim = " ";
   file_name = strtok_r((char*) fn_copy2, delim, dummy);
-  palloc_free_page(dummy);
 
   struct thread* tcurrent = thread_current();
   /* Create a new thread to execute FILE_NAME. */
@@ -59,18 +59,21 @@ process_execute (const char *file_name)
   sema_down(&tcurrent->creation_sema);
   palloc_free_page (fn_copy2);
  
-  // wait_sema 를 여기서 지역변수로 선언하면 struct thread* 도중의 커널 스택 영역에 할당될 수 있어
+  // c_elem 를 여기서 지역변수로 선언하면 struct thread* 도중의 커널 스택 영역에 할당될 수 있어
   // 스택이 지나가면서 훼손될 우려가 있다. 따라서 별도의 페이지를 할당해서 만들어줘야 한다.
-  struct child_elem* wait_sema;
-  wait_sema = palloc_get_page (0);
+  struct child_elem* c_elem;
+  c_elem = palloc_get_page (0);
 
-  wait_sema->child_tid = tid;
-  wait_sema->exit_status = -1;
-  sema_init(&wait_sema->semaphore, 0);
-  list_push_back(&tcurrent->child_list, &wait_sema->elem);
+  c_elem->child_tid = tid;
+  c_elem->exit_status = -1;
+  sema_init(&c_elem->semaphore, 0);
+  list_push_back(&tcurrent->child_list, &c_elem->elem);
 
+  palloc_free_page (fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy);
+  {
+    palloc_free_page (c_elem);
+  }
   if (!tcurrent->child_success) return -1;
   return tid;
 }
@@ -95,7 +98,6 @@ start_process (void *f_name)
   sema_up(&tcurrent->tparent->creation_sema);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
 
@@ -126,26 +128,26 @@ process_wait (tid_t child_tid UNUSED)
   int ans;
   struct thread* tcurrent = thread_current();
 
-  //lock_acquire(&tcurrent->finding_sema_lock);
+  lock_acquire(&tcurrent->finding_sema_lock);
   elem_pointer = list_begin(&(tcurrent->child_list));
   while (elem_pointer != list_end(&(tcurrent->child_list)))
   {
     i = list_entry(elem_pointer , struct child_elem, elem);
     if (i->child_tid == child_tid)
     {
-      //lock_release(&tcurrent->finding_sema_lock);
+      lock_release(&tcurrent->finding_sema_lock);
       sema_down(&i->semaphore);
       ans = i->exit_status;
-      //lock_acquire(&tcurrent->finding_sema_lock);
+      lock_acquire(&tcurrent->finding_sema_lock);
       list_remove(&i->elem);
       palloc_free_page(i);
-      //lock_release(&tcurrent->finding_sema_lock);
+      lock_release(&tcurrent->finding_sema_lock);
       return ans;
     }
     elem_pointer = list_next(elem_pointer);
   }
 
-  //lock_release(&tcurrent->finding_sema_lock);
+  lock_release(&tcurrent->finding_sema_lock);
   return -1;
 }
 
@@ -194,20 +196,20 @@ process_exit (void)
   // sema_up 시킬 세마를 찾는다.
   if(tcurrent->tparent->tid == tcurrent->tid) return;
 
-  //lock_acquire(&tcurrent->tparent->finding_sema_lock);
+  lock_acquire(&tcurrent->tparent->finding_sema_lock);
   elem_pointer = list_begin(&(tcurrent->tparent->child_list));
   while (elem_pointer != list_end(&(tcurrent->tparent->child_list)))
   {
     i = list_entry(elem_pointer , struct child_elem, elem);
     if (i->child_tid == tcurrent->tid)
     {
-      //lock_release(&tcurrent->tparent->finding_sema_lock);
+      lock_release(&tcurrent->tparent->finding_sema_lock);
       sema_up(&i->semaphore);
       return;
     }
     elem_pointer = list_next(elem_pointer);
   }
-  //lock_release(&tcurrent->tparent->finding_sema_lock);
+  lock_release(&tcurrent->tparent->finding_sema_lock);
 
   return;
 }
@@ -310,7 +312,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
-  char** dummy;
+  char dummy[200];
   const char* delim = " ";
   char* fn_copy; 
 
@@ -326,9 +328,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
   /* Open executable file. */
-  dummy = palloc_get_page(PAL_ZERO);
   file_name = strtok_r((char*) file_name, delim, dummy);
-  palloc_free_page(dummy);
   file = filesys_open (file_name);
 
   if (file == NULL) 
@@ -420,6 +420,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Set up stack. */
   if (!setup_stack (esp, fn_copy))
     goto done;
+  palloc_free_page(fn_copy);
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -566,6 +567,8 @@ setup_stack (void **esp, char* arg)
   char* next_ptr;
 
   char** pointer_tmp_stack = palloc_get_page (0);
+  if(pointer_tmp_stack == NULL)
+    return false;
 
   // 스택에 arg 내용을 4바이트 단위씩 저장하고 각각의 포인터를 pointer_tmp_stack에도 저장(그게 argv)
   if( strchr(arg, ' ') == NULL)

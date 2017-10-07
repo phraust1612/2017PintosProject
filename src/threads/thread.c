@@ -698,13 +698,19 @@ find_child (tid_t tid, struct thread* t)
 {
   struct list_elem* elem_pointer = NULL;
   struct child_elem* i = NULL;
-  
+
+  lock_acquire(&t->finding_sema_lock);
   elem_pointer = list_begin(&t->child_list);
   while (elem_pointer != list_end(&t->child_list))
   {
     i = list_entry(elem_pointer, struct child_elem, elem);
-    if (i->child_tid == tid) return i;
+    if (i->child_tid == tid)
+    {
+      lock_release(&t->finding_sema_lock);
+      return i;
+    }
     elem_pointer = list_next(elem_pointer);
   }
+  lock_release(&t->finding_sema_lock);
   return NULL;
 }
