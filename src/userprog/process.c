@@ -57,8 +57,11 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   sema_down(&tcurrent->creation_sema);
+  palloc_free_page (fn_copy);
   palloc_free_page (fn_copy2);
  
+  if (!tcurrent->child_success)
+    return -1;
   // c_elem 를 여기서 지역변수로 선언하면 struct thread* 도중의 커널 스택 영역에 할당될 수 있어
   // 스택이 지나가면서 훼손될 우려가 있다. 따라서 별도의 페이지를 할당해서 만들어줘야 한다.
   struct child_elem* c_elem;
@@ -69,12 +72,10 @@ process_execute (const char *file_name)
   sema_init(&c_elem->semaphore, 0);
   list_push_back(&tcurrent->child_list, &c_elem->elem);
 
-  palloc_free_page (fn_copy);
   if (tid == TID_ERROR)
   {
     palloc_free_page (c_elem);
   }
-  if (!tcurrent->child_success) return -1;
   return tid;
 }
 
@@ -179,6 +180,19 @@ process_exit (void)
 
   struct list_elem* elem_pointer = NULL;
   struct child_elem* i = NULL;
+
+  lock_acquire(&tcurrent->finding_sema_lock);
+  elem_pointer = list_begin(&tcurrent->child_list);
+  while (elem_pointer != list_end(&tcurrent->child_list))
+  {
+    i = list_entry(elem_pointer , struct child_elem, elem);
+    lock_release(&tcurrent->finding_sema_lock);
+    printf("i : %p, child_tid : %d...\n", i, i->child_tid);
+    process_wait(i->child_tid);
+    lock_acquire(&tcurrent->finding_sema_lock);
+    elem_pointer = list_next(elem_pointer);
+  }
+  lock_release(&tcurrent->finding_sema_lock);
 
   // struct thread의 file_list를 deallocate
   struct file_elem* fi =NULL;
@@ -562,6 +576,7 @@ setup_stack (void **esp, char* arg)
     }
 
   int tmp;
+  int* ebp = (int*)*esp;
   int argc = 0;
   char* ret_ptr;
   char* next_ptr;
@@ -576,6 +591,11 @@ setup_stack (void **esp, char* arg)
     tmp = (int) (strlen(arg) + 4)/4;
     tmp *= 4;
     *esp -= tmp;
+    if(*esp < ebp - 0x100)
+    {
+      palloc_free_page(pointer_tmp_stack);
+      return false;
+    }
     memcpy(*esp, arg, strlen(arg)+1);
     memcpy((char**)pointer_tmp_stack+argc, esp, sizeof(char*));
     argc += 1;
@@ -586,6 +606,11 @@ setup_stack (void **esp, char* arg)
     tmp = (int) (strlen(ret_ptr) + 4)/4;
     tmp *= 4;
     *esp -= tmp;
+    if(*esp < ebp - 0x100)
+    {
+      palloc_free_page(pointer_tmp_stack);
+      return false;
+    }
     memcpy(*esp, ret_ptr, strlen(ret_ptr)+1);
     memcpy((char**)pointer_tmp_stack+argc, esp, sizeof(char*));
     argc += 1;
@@ -597,6 +622,11 @@ setup_stack (void **esp, char* arg)
 
   // argv[] 를 스택에 저장
   *esp -= argc * sizeof(char*);
+  if(*esp < ebp - 0x100)
+  {
+    palloc_free_page(pointer_tmp_stack);
+    return false;
+  }
   memcpy(*esp, pointer_tmp_stack, argc*sizeof(char*));
   palloc_free_page (pointer_tmp_stack); 
 
@@ -604,14 +634,20 @@ setup_stack (void **esp, char* arg)
 
   char* tmpp = *esp;
   *esp -= sizeof(char**);
+  if(*esp < ebp - 0x100)
+    return false;
   memcpy(*esp, &tmpp, sizeof(char **));
 
   // argc 를 스택에 저장
   *esp -= sizeof(int);
+  if(*esp < ebp - 0x100)
+    return false;
   memcpy(*esp, &argc, sizeof(int));
 
   // return address 크기만큼 스택에 저장.
   *esp -= sizeof(void*);
+  if(*esp < ebp - 0x100)
+    return false;
 
   return success;
 }

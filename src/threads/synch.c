@@ -67,8 +67,6 @@ sema_down (struct semaphore *sema)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  sema->waiters.head.prev =NULL;
-  sema->waiters.tail.next =NULL;
   while (sema->value == 0) 
     {
       list_push_back(&sema->waiters, &thread_current()->elem);
@@ -116,8 +114,6 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  sema->waiters.head.prev =NULL;
-  sema->waiters.tail.next =NULL;
   if (!list_empty (&sema->waiters)) 
   {
     // actually this sort becomes unnecessary if it is sorted at
