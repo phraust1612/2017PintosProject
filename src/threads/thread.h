@@ -23,11 +23,12 @@ enum thread_status
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
-struct wait_semaphore_elem 
+struct child_elem 
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
     tid_t child_tid;
+    int exit_status;
   };
 
 struct file_elem
@@ -120,7 +121,8 @@ struct thread
 
     struct semaphore creation_sema;
 
-    struct list child_wait_sema;
+    struct lock finding_sema_lock;
+    struct list child_list;
     struct thread* tparent;
     bool child_success;
 
@@ -129,7 +131,7 @@ struct thread
     // 다음 할당될 fd
     int next_fd;
 
-    int child_exit_status;
+    struct file* exec_file;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -173,14 +175,13 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-static bool is_thread (struct thread *) UNUSED;
-bool is_child(tid_t child_tid);
 
 // less_wakeup_tick
 // return true if x has less wakeup_tick than y
 bool less_wakeup_tick(struct list_elem* x, struct list_elem* y, void* aux UNUSED);
 bool higher_priority (struct list_elem* x, struct list_elem* y, void* aux UNUSED);
 struct file_elem* find_file(int fd);
+struct child_elem* find_child(tid_t tid, struct thread* t);
 
 void file_lock_acquire(void);
 void file_lock_release(void);

@@ -38,9 +38,13 @@ process_execute (const char *file_name)
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
-  fn_copy2 = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
+  fn_copy2 = palloc_get_page (0);
+  if (fn_copy2 == NULL)
+  {
+    //TODO
+  }
   strlcpy (fn_copy, file_name, PGSIZE);
   strlcpy (fn_copy2, file_name, PGSIZE);
 
@@ -57,12 +61,13 @@ process_execute (const char *file_name)
  
   // wait_sema 를 여기서 지역변수로 선언하면 struct thread* 도중의 커널 스택 영역에 할당될 수 있어
   // 스택이 지나가면서 훼손될 우려가 있다. 따라서 별도의 페이지를 할당해서 만들어줘야 한다.
-  struct wait_semaphore_elem* wait_sema;
+  struct child_elem* wait_sema;
   wait_sema = palloc_get_page (0);
 
   wait_sema->child_tid = tid;
+  wait_sema->exit_status = -1;
   sema_init(&wait_sema->semaphore, 0);
-  list_push_back(&tcurrent->child_wait_sema, &wait_sema->elem);
+  list_push_back(&tcurrent->child_list, &wait_sema->elem);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
@@ -117,24 +122,30 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   struct list_elem* elem_pointer = NULL;
-  struct wait_semaphore_elem* i = NULL;
-
+  struct child_elem* i = NULL;
+  int ans;
   struct thread* tcurrent = thread_current();
 
-  elem_pointer = list_begin(&(tcurrent->child_wait_sema));
-  while (elem_pointer != list_end(&(tcurrent->child_wait_sema)))
+  //lock_acquire(&tcurrent->finding_sema_lock);
+  elem_pointer = list_begin(&(tcurrent->child_list));
+  while (elem_pointer != list_end(&(tcurrent->child_list)))
   {
-    i = list_entry(elem_pointer , struct wait_semaphore_elem, elem);
+    i = list_entry(elem_pointer , struct child_elem, elem);
     if (i->child_tid == child_tid)
     {
+      //lock_release(&tcurrent->finding_sema_lock);
       sema_down(&i->semaphore);
+      ans = i->exit_status;
+      //lock_acquire(&tcurrent->finding_sema_lock);
       list_remove(&i->elem);
       palloc_free_page(i);
-      return tcurrent->child_exit_status;
+      //lock_release(&tcurrent->finding_sema_lock);
+      return ans;
     }
     elem_pointer = list_next(elem_pointer);
   }
 
+  //lock_release(&tcurrent->finding_sema_lock);
   return -1;
 }
 
@@ -162,38 +173,41 @@ process_exit (void)
       pagedir_destroy (pd);
     }
 
+  file_close(tcurrent->exec_file);
+
   struct list_elem* elem_pointer = NULL;
-  struct wait_semaphore_elem* i = NULL;
-  struct file_elem* fi =NULL;
+  struct child_elem* i = NULL;
 
   // struct thread의 file_list를 deallocate
-  /*
+  struct file_elem* fi =NULL;
   file_lock_acquire();
   elem_pointer = list_begin(&(tcurrent->file_list));
   while (elem_pointer != list_end(&(tcurrent->file_list)))
   {
     fi = list_entry(elem_pointer , struct file_elem, elem);
     file_close(fi->f);
-    palloc_free_page(fi);
     elem_pointer = list_next(elem_pointer);
+    palloc_free_page(fi);
   }
   file_lock_release();
-  */
 
   // sema_up 시킬 세마를 찾는다.
   if(tcurrent->tparent->tid == tcurrent->tid) return;
 
-  elem_pointer = list_begin(&(tcurrent->tparent->child_wait_sema));
-  while (elem_pointer != list_end(&(tcurrent->tparent->child_wait_sema)))
+  //lock_acquire(&tcurrent->tparent->finding_sema_lock);
+  elem_pointer = list_begin(&(tcurrent->tparent->child_list));
+  while (elem_pointer != list_end(&(tcurrent->tparent->child_list)))
   {
-    i = list_entry(elem_pointer , struct wait_semaphore_elem, elem);
+    i = list_entry(elem_pointer , struct child_elem, elem);
     if (i->child_tid == tcurrent->tid)
     {
+      //lock_release(&tcurrent->tparent->finding_sema_lock);
       sema_up(&i->semaphore);
       return;
     }
     elem_pointer = list_next(elem_pointer);
   }
+  //lock_release(&tcurrent->tparent->finding_sema_lock);
 
   return;
 }
@@ -411,10 +425,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+  file_deny_write(file);
+  t->exec_file = file;
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   file_lock_release();
   return success;
 }

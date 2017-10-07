@@ -72,6 +72,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+static bool is_thread (struct thread *) UNUSED;
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -501,25 +502,6 @@ is_thread (struct thread *t)
   return t != NULL && t->magic == THREAD_MAGIC;
 }
 
-
-/* returns true if child_tid is child of current thread */
-bool
-is_child (tid_t child_tid)
-{
-  struct list_elem* elem_pointer = NULL;
-  struct wait_semaphore_elem* i = NULL;
-  struct thread* tcurrent = thread_current();
-  
-  elem_pointer = list_begin(&(tcurrent->child_wait_sema));
-  while (elem_pointer != list_end(&tcurrent->child_wait_sema))
-  {
-    i = list_entry(elem_pointer, struct wait_semaphore_elem, elem);
-    if (i->child_tid == child_tid) return true;
-    elem_pointer = list_next(elem_pointer);
-  }
-  return false;
-}
-
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
@@ -530,7 +512,6 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (name != NULL);
 
   memset (t, 0, sizeof *t);
-  t->child_exit_status = -1;
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
@@ -540,11 +521,15 @@ init_thread (struct thread *t, const char *name, int priority)
   t->plock_acq = NULL;
   list_init(&t->lock_own_list);
   t->tparent = running_thread();
+  if(!is_thread(t->tparent)) t->tparent = t;
+  // recursively set current thread's level
   t->next_fd = 2;
   t->child_success = false;
+  t->exec_file = NULL;
   sema_init(&t->creation_sema,0);
   list_init(&t->file_list);
-  list_init(&t->child_wait_sema);
+  list_init(&t->child_list);
+  lock_init(&t->finding_sema_lock);
   initial_thread->wakeup_tick = 0;
 }
 
@@ -706,4 +691,20 @@ void
 file_lock_release(void)
 {
   lock_release(&file_rw_lock);
+}
+
+struct child_elem*
+find_child (tid_t tid, struct thread* t)
+{
+  struct list_elem* elem_pointer = NULL;
+  struct child_elem* i = NULL;
+  
+  elem_pointer = list_begin(&t->child_list);
+  while (elem_pointer != list_end(&t->child_list))
+  {
+    i = list_entry(elem_pointer, struct child_elem, elem);
+    if (i->child_tid == tid) return i;
+    elem_pointer = list_next(elem_pointer);
+  }
+  return NULL;
 }

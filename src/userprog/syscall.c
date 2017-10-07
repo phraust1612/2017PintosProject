@@ -21,6 +21,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   const char* buffer;
   int* size;
   struct file_elem* f_elem;
+  struct child_elem* t_elem;
   struct thread* tcurrent = thread_current();
 
   if(!check_valid_pointer(f->esp))
@@ -42,7 +43,8 @@ syscall_handler (struct intr_frame *f UNUSED)
         printf("%s: exit(%d)\n", buffer, -1);
       else
       {
-        tcurrent->tparent->child_exit_status = *arg;
+        t_elem = find_child(tcurrent->tid, tcurrent->tparent);
+        t_elem->exit_status = *arg;
         printf("%s: exit(%d)\n", buffer, (int) *arg);
       }
       thread_exit();
