@@ -1,0 +1,324 @@
+			+---------------------------+
+			|		CS 330				|
+			| PROJECT 2: USER PROGRAMS	|
+			| 	   DESIGN DOCUMENT     	|
+			+---------------------------+
+
+team name   : 김치워리어
+project #   : 2
+# of tokens : 0
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+민병욱 <phraust@kaist.ac.kr>
+오승윤 <syoh0708@kaist.ac.kr>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			   ARGUMENT PASSING
+			   ================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+argument passing을 위해 추가적으로 만든 data structure는 따로 없습니다.
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe how you implemented argument parsing.  How do
+>> you arrange for the elements of argv[] to be in the right order?
+>> How do you avoid overflowing the stack page?
+
+argv[]가 올바른 순서로 넘겨주기 위해 각 argv를 스택에 저장할 때마다
+그 주소를 임시로 페이지를 할당한 곳에 저장하고
+그 페이지를 통채로 스택에 푸쉬했다.
+
+overflow 를 방지하기 위해 매번 esp주소를 내릴 때마다 처음 ebp값과
+비교해서 0x100보다 벌어지면 setup_stack을 false를 리턴하게 하였다.
+
+---- RATIONALE ----
+
+>> A3: Why does Pintos implement strtok_r() but not strtok()?
+
+strtok 는 다음과 같은데
+
+char *strtok(char *str, const char *delim) {
+    static char *save;
+    return strtok_r(str, delim, &save);
+}
+
+static char* save로 선언된 것이 멀티스레드에서 같은 지역을 서로 덮어쓸
+수 있기 때문에 불안전하여 strtok_r을 사용을 했다.
+
+
+>> A4: In Pintos, the kernel separates commands into a executable name
+>> and arguments.  In Unix-like systems, the shell does this
+>> separation.  Identify at least two advantages of the Unix approach.
+
+Unix shell은 user-level thread이기 때문에 핀토스처럼 kernel-level thread
+에서 파싱이나 invalid한 경우로 인한 context swtich가 일어나는 것보다
+더 빠르고 효율적일 수 있는 장점이 있다.
+
+두 번째로는 핀토스 커널에서 strtok_r을 쓰기 위해 원본을 따로 보관하기
+위해 페이지를 할당해서 복사하는 과정이 있었는데, Unix처럼 쉘단계에서
+미리 파싱해서 주면 그러한 불필요한 커널메모리 소모를 안해도 된다.
+
+
+			     SYSTEM CALLS
+			     ============
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+in threads/thread.h
+
+// struct thread에서 child_list에 넣기 위한 unit으로
+// 부모자식간의 wait/exit을 동기화하는 sema와
+// wait에서 exit에서 준 exit_status를 갖고 있다.
+struct child_elem 
+  {
+    struct list_elem elem;              /* List element. */
+    struct semaphore semaphore;         /* This semaphore. */
+    tid_t child_tid;    // 자식 tid
+    int exit_status;    // initially -1, 제대로 되면 바뀐다.
+  };
+
+// struct thread에서 file_list에 넣기 위한 unit으로
+// 해당 스레드가 갖고 있는 파일들이므로 exit하기전에 dealloc할 대상
+// struct file*에 대응되는 fd를 같이 갖고 있는 structure다.
+struct file_elem
+{
+  struct list_elem elem;
+  struct file* f;
+  int fd;       // file descriptor
+};
+
+struct thread
+{
+    // process_execute에서 load까지 완전히 끝날 때까지
+    // 기다리는 synch 문제때문에 사용
+    struct semaphore creation_sema;
+
+    // child_list를 접근/사용하는 부분은 critical section이므로
+    // 그 CS를 동기화하기 위해 만든 락
+    struct lock finding_sema_lock;
+    // 이 스레드가 갖고 있는 자식들
+    struct list child_list;
+    // 이 스레드의 부모스레드, 부모의 세마 등에 접근하기 위해 필요
+    struct thread* tparent;
+    // 자식 스레드가 성공적으로 만들어졌는지에 대한 boolean
+    bool child_success;
+
+    // struct file* 와 대응하는 file descriptor(int)의 리스트
+    struct list file_list;
+    // 다음 할당될 fd
+    int next_fd;
+
+    // 이 스레드를 실행시킨 executable file
+    struct file* exec_file;
+}
+
+
+in threads/thread.c
+// file을 읽고 쓰는 등 filesys관련해서 synch를 맞추는 락
+static struct lock file_rw_lock;
+
+>> B2: Describe how file descriptors are associated with open files.
+>> Are file descriptors unique within the entire OS or just within a
+>> single process?
+
+struct file_elem이라는 data structure를 만들어서
+struct file*과 일대일대응하는 int fd를 file_elem 구조에서 갖는다.
+그리고 할당해줄 때마다 struct thread에서 갖고 있는 next_fd를 늘려줌으로
+유일성을 보장한다.
+(스레드마다 next_fd를 따로 갖기 때문에 다른 스레드로부터 next_fd가 
+침범당할 우려를 할 필요가 없어서 락 등을 쓰지 않았다.
+즉 우리는 single process내에서만 유일하다.)
+
+
+---- ALGORITHMS ----
+
+>> B3: Describe your code for reading and writing user data from the
+>> kernel.
+
+syscall_handler에서 argument들 받기 위해 intr frame* f에서 
+스택에 쌓여있는 순서대로 arguments로 꺼냈다.
+현재 스레드의 file_list에서 찾은 arguments를 토대로
+해당되는 파일을 찾아서 filesys 함수들에게 넘겨주었다.
+
+
+>> B4: Suppose a system call causes a full page (4,096 bytes) of data
+>> to be copied from user space into the kernel.  What is the least
+>> and the greatest possible number of inspections of the page table
+>> (e.g. calls to pagedir_get_page()) that might result?  What about
+>> for a system call that only copies 2 bytes of data?  Is there room
+>> for improvement in these numbers, and how much?
+
+pagedir_get_page는 받은 arguement들이 valid한지 확인할 때 쓰이며
+최소 한 번만에 모든 arguments를 통채로 확인할 수 있고
+최대 가장 많은 argument를 가진 3번만큼 호출될 수 있다.
+
+user space에서 kernel로 복사되는 경우는 process_execute에서 file_name
+만 복사해올 때 있는데, 그 크기에 대해 따로 고려한 바는 없다.
+(왜냐면 어차피 핀토스로 넘어오는 file_name은 128바이트보다 작고
+유저에서 다른 프로그램을 exec할 때 스택자체가 0x100보다 작게끔
+하였기 때문에 고려하지 않았다.)
+
+
+>> B5: Briefly describe your implementation of the "wait" system call
+>> and how it interacts with process termination.
+
+struct thread에 있는 child_list로 부모가 자식을 새로 만들때마다
+이 리스트에 세마와 같이 추가되는데, wait은 기다리려는 자식의
+세마를 down함으로서 기다리게된다.
+그리고 자식은 부모가 기다리는 wait에 exit_status를 넘기기 위해
+exit에서 부모의 child_list에서 자신과 대응되는 element를
+찾아 그 structure에 exit_status를 남겨둔다.
+
+
+>> B6: Any access to user program memory at a user-specified address
+>> can fail due to a bad pointer value.  Such accesses must cause the
+>> process to be terminated.  System calls are fraught with such
+>> accesses, e.g. a "write" system call requires reading the system
+>> call number from the user stack, then each of the call's three
+>> arguments, then an arbitrary amount of user memory, and any of
+>> these can fail at any point.  This poses a design and
+>> error-handling problem: how do you best avoid obscuring the primary
+>> function of code in a morass of error-handling?  Furthermore, when
+>> an error is detected, how do you ensure that all temporarily
+>> allocated resources (locks, buffers, etc.) are freed?  In a few
+>> paragraphs, describe the strategy or strategies you adopted for
+>> managing these issues.  Give an example.
+
+check_valid_pointer라는 함수를 만들어서 매번 syscall_handler가
+argument들을 받은 것을 일일히 넘겨서 확인했다.
+이 때 check_valid_pointer가 하는 일은 user virtual address인지
+확인하고 맞으면 pagedir_get_page를 이용하여 valid한 페이지인지
+확인하여 true를 리턴한다.
+
+그래서 만약 arguments중에 하나라도 invalid한 것이 있으면
+해당 syscall_handler는 작업을 더 수행하지 않고 바로 실행중인
+return값을 저장해두고 thread_exit()을 통해 프로세스를 종료시키면서
+종료문을 출력시키게 처리하였다.
+그리고 deallocate을 해야하는 자원 등은 thread_exit안에 있는
+process_exit에서 모두 처리하는 전략을 사용했다.
+
+deallocate해야 할 것들은 우리가 새로 만든 structure 인
+file_list와 child_list에 각 원소들뿐인데 process_exit에서
+while문 돌면서 일일히 deallocate했고 
+자식들이 자원이 deallocate될 가능성을 배제하기 위해
+죽기전에 모든 자식들을 wait했으므로 문제 없다고 ensure했다.
+
+예를 들어 syscall_handler에서 SYS_WRITE을 받아서 arguments를
+받았는데 check_valid_pointer에서 false를 리턴한 경우 f->eax를 -1로
+set하고 출력문 출력시킨 후에 thread_exit()을 실행하게 되는데
+이곳에서 그동안 이 스레드가 할당했었던 모든 자원을 deallocate한다.
+
+
+---- SYNCHRONIZATION ----
+
+>> B7: The "exec" system call returns -1 if loading the new executable
+>> fails, so it cannot return before the new executable has completed
+>> loading.  How does your code ensure this?  How is the load
+>> success/failure status passed back to the thread that calls "exec"?
+
+이것을 ensure하기 위해서 struct thread에 creation_sema와
+success_child를 만들어서 process_execute에서 thread_create를 하고
+creation_sema를 다운시키고 start_process에서 생성작업이 모두 끝날 때
+success_child에 성공여부를 set하고 기다리고 있던 creation_sema를
+up함으로서 이 success/failure status를 확신할 수 있게 하였다.
+
+
+>> B8: Consider parent process P with child process C.  How do you
+>> ensure proper synchronization and avoid race conditions when P
+>> calls wait(C) before C exits?  After C exits?  How do you ensure
+>> that all resources are freed in each case?  How about when P
+>> terminates without waiting, before C exits?  After C exits?  Are
+>> there any special cases?
+
+먼저 C가 exit하기 전에 P가 wait(C)를 한 경우엔 부모자식간에 해당되는
+P의 child_list에서의 sema를 찾아 P에서 sema_down을 하여 C가 exit에서
+sema_up해줄 때까지 기다리게 된다.
+두 번째로 C가 이미 exit되었는데 P에서 wait(C)를 할 경우엔 C에서
+exit할 때 P의 child_list에서 자신과의 관계에 해당되었던 elem를
+deallocate하였기 때문에 child_list에서 찾을 세마가 없어서 바로 -1를
+리턴하게된다.
+세 번째로 C가 종료되기 전에 P가 먼저 wait없이 종료되려고 하면
+process_exit에서 child_list에 있는 모든 자식에 대해 wait을 걸어서
+wait없이 부모가 먼저 죽는 일이 없게끔 하였으며
+네 번째로 C가 종료되고 P가 wait없이 종료되려고 하면
+process_exit안에 process_wait이 있기 때문에 2번째 경우랑 다를 바 없다.
+
+
+---- RATIONALE ----
+
+>> B9: Why did you choose to implement access to user memory from the
+>> kernel in the way that you did?
+
+check_valid_pointer함수가 그 유저메모리에 접근하는 함수였는데
+그래서 커널풀에 있는 경우는 제외했고,
+user memory는 valid한 포인터라면 struct thread의 pagedir에 있어야
+하므로 pagedir_get_page에서 NULL이 아닌 값을 리턴하면 유효함을
+알 수 있기 때문에 이렇게 구현하였다.
+
+
+>> B10: What advantages or disadvantages can you see to your design
+>> for file descriptors?
+
+우리 디자인은 global한 file descriptor가 아니라 각 프로세스안에서만
+unique한 file descriptor를 갖게하였는데
+이로 인한 장점은 globally unique하기 위해선 tid에서도 했듯이 락을
+acquire해서 next_fd를 올려줘야 하는데 우리 디자인은 락을 필요로
+하지 않기 때문에 효율적이다.
+반면 단점으로는 다른 스레드의 파일을 file descriptor를 통해서
+접근할 수 없거나 비교가 불가능한 단점이 있을 수는 있다.
+
+
+>> B11: The default tid_t to pid_t mapping is the identity mapping.
+>> If you changed it, what advantages are there to your approach?
+
+만약 핀토스의 하나의 프로세스가 여러 스레드를 가질 수 있는 시스템이었
+다면 tid에서 pid로 매핑이 필요했겠지만, 한 프로세스에 단 하나의 
+스레드밖에 없기 때문에 굳이 필요하지 않다고 생각하여 이 문제에 대해
+따로 구현한 바가 없으며, 굳이 pid와 tid를 다르게 가진다면 오히려
+OS를 구현하는 개발자 입장에서 혼란의 여지가 있을 수 있다.
+
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?

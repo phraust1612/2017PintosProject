@@ -1,0 +1,240 @@
+			+--------------------+
+			|       CS 330       |
+			| PROJECT 1: THREADS |
+			|   DESIGN DOCUMENT  |
+			+--------------------+
+				   
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+team name : 38 김치워리어
+project no : 1
+# of tokens : 0
+
+민병욱 <phraust@kaist.ac.kr>
+오승윤 <syoh0708@kaist.ac.kr>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, usage of tokens, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			     ALARM CLOCK
+			     ===========
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+int wakeup_tick (in struct thread)
+purpose : timer interrupt handler가 깨워줘야할 tick을 저장하기 위해서
+
+struct list waiting_list (in devices/timer.c)
+purpose : 여러 개의 스레드가 timer_sleep으로 blocked되었을 때 관리/저장하기 위해서
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe what happens in a call to timer_sleep(),
+>> including the effects of the timer interrupt handler.
+
+나중에 timer interrupt handler가 깨울 틱을 계산하여
+struct thread에 있는 wakeup_tick을 저장한다.
+timer interrupt handler가 호출되었을 때
+waiting_list에 있는 스레드들의 wakeup_tick을 확인해서
+깨워야 할 tick이 맞으면 그 스레드들을 unblock시켰다.
+
+>> A3: What steps are taken to minimize the amount of time spent in
+>> the timer interrupt handler?
+
+timer interrupt handler가 굳이 모든 wainting_list의 스레드를
+확인할 필요 없이 애초에 timer_sleep에서 wakeup_tick이 낮은 순으로
+정렬되게 삽입하게 하였다.
+그럼 timer interrupt handler가 확인하는 wakeup_tick이 현재 틱보다
+높아지게 되면 남은 waiting_list의 스레드를 굳이 확인할 필요 없다.
+
+
+---- SYNCHRONIZATION ----
+
+>> A4: How are race conditions avoided when multiple threads call
+>> timer_sleep() simultaneously?
+
+timer_sleep이 수행중에 race condition을 방지하기 위해
+초기에 인터럽트를 껐다가 마지막에 이전 상태랑 똑같이 복구하였다.
+
+>> A5: How are race conditions avoided when a timer interrupt occurs
+>> during a call to timer_sleep()?
+
+마찬가지로 timer_sleep이 인터럽트를 껐기 때문에 이문제는 해결될 것이다.
+
+---- RATIONALE ----
+
+>> A6: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+동시에 여러 개의 스레드가 timer_sleep으로 blocked될 수 있기 때문에
+그들을 관리할 어떤 data structure가 필요한 것은 자명하였고
+연습반에서 lib/kernel/list.c를 참고하길 권고하였기 때문에
+이와 같은 디자인을 하게 되었다.
+이 때 정렬을 하면 불필요한 check를 피할 수 있기 때문에
+list_insert_ordered를 사용하여 효율성을 높인 디자인을 하게 되었다.
+
+			 PRIORITY SCHEDULING
+			 ===================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+(in struct thread)
+    // lock_list : 이 스레드가 own하고 있는 모든 locks
+    struct list lock_own_list;
+    // lock_acq_list : 이 스레드가 acquire하고 싶어하는 lock
+    // nested donation 을 할 때 다음 lock 을 알기 위해
+    struct lock* plock_acq;
+    // priority donate 이전에 원래 있었던 priority
+    // 이를 두는 이유는 lock release할 때 priority를 설정하기 위해
+    int origin_priority;
+
+(in struct lock)
+    // thread가 own하고 있는 elem,
+    // struct thread의 lock_own_list의 elem으로 들어가기 위한 것.
+    struct list_elem own_elem;
+
+>> B2: Explain the data structure used to track priority donation.
+>> Use ASCII art to diagram a nested donation.  (Alternately, submit a
+>> .png file.)
+
+nest donation 은 스레드A가 acquire하는 lock 2의 owner B에게 donation을 하고,
+B가 acquire하는 lock 1의 owner C에게 recursive하게 donation이 일어나야 하는데
+B가 acquire하고 있는 락이 무엇인지 기억해야만 nested donation을 할 수 있고,
+이를 위해서 자신이 acquire하는 락을 struct thread에 plock_acq에 저장한다.
+
++------+      +------+      +------+
+| C    |   +- | B    |   +- | A    |
++------+   |  +------+   |  +------+
+  |        |    |        |
+  |own     |acquire      |acquire
+  |        |    |        |
++------+   |  +------+   |
+|lock 1|<--+  |lock 2|<--+
++------+      +------+
+
+---- ALGORITHMS ----
+
+>> B3: How do you ensure that the highest priority thread waiting for
+>> a lock, semaphore, or condition variable wakes up first?
+
+sema_down에서 sema 의 waiters에 스레드를 넣을 때
+higher_priority 에 따라 높은 priority를 가진 스레드가
+waiters의 앞에 있도록 삽입하였기 때문에
+sema와 lock들의 waiters의 pop_front가 가장 높은 priority의 스레드임을
+확신할 수 있었다.
+(higher_priority는 두 스레드를 비교하여 첫 번째 인자의
+priority가 더 높으면 true를 리턴하는 boolean function이다.)
+
+반면 condition variable은 cond->waiters에 semaphore_elem을 넣어줄 때
+초기화된 semaphore_elem은 아직 waiters가 빈 상태로 들어가게 되므로
+list_insert_ordered로 정렬상태를 유지하면서 삽입하기가 어렵다고 생각했다.
+따라서 나중에 cond_signal에서 sema_up을 호출하기 전에
+higher_priority_insema에 따라 미리 cond->waiters를 정렬을 하여
+가장 높은 priority를 가진 스레드를 가진 semaphore_elem이 pop될 수 있게 하였다.
+(higher_priority_insema도 우리가 만든 helper function으로
+higher_priority와 유사하나 두 개의 semaphore_elem을 비교한다.)
+
+>> B4: Describe the sequence of events when a call to lock_acquire()
+>> causes a priority donation.  How is nested donation handled?
+
+priority donation이 일어날 상황은 우선 acquire한 lock의 holder가 존재하고,
+그 holder thread(donatee)의 priority가 acquire한 thread(donator)의
+priority보다 낮으면 도네이션이 일어난다.
+이 때는 origin_priority의 변동 없이 donatee의 priority를 donator의
+priority를 복사하고 (specific_thread_set_priority)
+donatee의 plock_acq를 확인하여 NULL이 아니면 nested donation이
+필요한 것이니 plock_acq의 priority도 같은 방식으로 recursive하게
+donate한다.
+
+
+>> B5: Describe the sequence of events when lock_release() is called
+>> on a lock that a higher-priority thread is waiting for.
+
+lock_release가 일어나면 먼저 holder를 초기화 시키고(NULL)
+holder thread였던 스레드의 lock_own_list 에서 이 락을 제외시킨다.
+이후 sema_up을 호출하면서 sema->waiters front에 있던
+스레드를 unblock시키고 sema up시키면서
+priority donate 받았을 경우를 위해 다시 돌아갈 priority를 계산하는데
+(recalculate_priority)
+
+lock_own_list 에 갖고 있는 lock의 waiter 스레드들의 가장 큰 priority와
+donate 받기 전의 priority (origin_priority)를 비교하여
+더 큰 값으로 돌아간다.
+
+---- SYNCHRONIZATION ----
+
+>> B6: Describe a potential race in thread_set_priority() and explain
+>> how your implementation avoids it.  Can you use a lock to avoid
+>> this race?
+
+donate이 끝나고 돌려받을 priority 를 계산하는 recalculate_priority와
+thread_set_priority가 synch가 맞아야 하는데 우리 디자인으로는
+lock_acquire/lock_release가 두 함수를 호출하기 때문에 그 함수 안에서는
+lock을 사용할 수 없었다. 따라서 인터럽트를 껐다가 키는 방식으로
+synch문제를 해결하였다.
+
+---- RATIONALE ----
+
+>> B7: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+처음에는 nested priority donation에서 acquire한 lock을 추적하기 위해
+struct thread에 list를 만들어서 추적하려고 했다.
+그렇게 하기 위해서 struct lock에도 대응되는 list_elem을 만들어야 했고,
+list_elem은 하나의 list 에만 속할 수 있는데
+하나의 락을 여러 개의 스레드가 acquire할 수 있기 때문에 힘들다고 생각했다.
+
+그러나 한 thread에서는 최대 하나의 lock만 acquire할테니
+list로 가질 필요가 없다고 생각하여 포인터로서 acquire한 lock을 쥐고 있자고
+생각하여 plock_acq로 대체하게 되었다.
+
+lock release시에 priority를 재설정하는 방법으로 처음에는 무조건 origin_priority로
+돌아갔다가 다시 priority donate을 받는 방법을 생각했는데,
+스레드가 hold하고있는 lock의 list를 저장하여 lock들의 waiter의 priority중 가장 높은
+priority로 바로 재설정 되면 불필요한 priority donation을 다시 거칠 필요가 없어
+이렇게 디자인 하면 효율적일 것이라 생각하였다.
+
+또한 lock_release등의 상황에서 어떤 스레드가 unblock이 되었을 때
+set priority처럼 바로 재스케쥴링이 필요할 수 있기 때문에
+딱히 priority 변동이 없어도 unblock이후에 자기자신의 priority로 thread_set_priority
+를 호출함으로서 이 문제를 해결하였다.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?
