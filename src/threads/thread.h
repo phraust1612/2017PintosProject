@@ -9,6 +9,10 @@
 #include "vm/page.h"
 #endif
 
+#ifndef __VM_SWAP_H
+#include "vm/swap.h"
+#endif
+
 #ifndef __LIB_KERNEL_HASH_H
 #include "lib/kernel/hash.h"
 #endif

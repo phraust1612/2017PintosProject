@@ -211,24 +211,11 @@ process_exit (void)
   struct hash_iterator* hi;
   struct page* pi = NULL;
   supplementary_lock_acquire(tcurrent);
-  /*
-  hash_first (hi, &tcurrent->supplementary_page_table);
-  struct hash_elem* togo = hash_next(hi);
-  while (togo)
-  {
-    printf("hi = %p ",hi);
-    pi = hash_entry (hash_cur (hi), struct page, elem);
-    printf("pi = %p \n",pi);
-    togo = hash_next(hi);
-    if(pi != NULL)
-    {
-      free(pi);
-      pi = NULL;
-    }
-  }
-  */
   hash_destroy(&tcurrent->supplementary_page_table, (hash_action_func*) remove_page);
   supplementary_lock_release(tcurrent);
+
+  // frame_table에서 이 프로세스에 해당하는 frame_elem deallocate
+  frame_table_delete (tcurrent->pagedir);
 
   // sema_up 시킬 세마를 찾는다.
   if(tcurrent->tparent->tid == tcurrent->tid) return;

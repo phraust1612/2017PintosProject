@@ -158,40 +158,71 @@ page_fault (struct intr_frame *f)
   struct page* faulted_page = page_lookup (upage, tcurrent);
   if (faulted_page == NULL)
   {
+    kill(f);
     return;
   }
-  int filepos = faulted_page->load_filepos;
-  int read_bytes = faulted_page->load_read_bytes;
+  uint32_t filepos = faulted_page->load_filepos;
+  uint32_t read_bytes = faulted_page->load_read_bytes;
   bool writable = faulted_page->writable;
+  bool swap_out = faulted_page->swap_outed;
+  uint32_t swap_index = faulted_page->swap_index;
   if(filepos < 0 || read_bytes < 0)
   {
     return;
   }
   uint8_t *kpage = palloc_get_page (PAL_USER|PAL_ZERO);
+  size_t jeonduhwan;
+  disk_sector_t i;
+  int count;
+  struct frame_elem* fr_elem;
+  void* victim_paddr;
   if (kpage == NULL)
   {
-    //kill(f);
-    return false;
+    // TODO: swap out
+    struct disk* d = disk_get(1,1);
+    jeonduhwan = swap_table_scan_and_flip();
+    fr_elem = frame_table_find_victim();
+    victim_paddr = pagedir_get_page(fr_elem->pd, fr_elem->vaddr);
+    count = 0;
+    for (i = jeonduhwan*8; i<jeonduhwan*8+8; i++)
+    {
+      disk_write(d, i, victim_paddr + count*DISK_SECTOR_SIZE);
+      count++;
+    }
+    palloc_free_page(victim_paddr);
+    free (fr_elem);
+    kpage = palloc_get_page (PAL_USER|PAL_ZERO);
+    if (kpage == NULL) return;
   }
 
   if(not_present)
   {
-    file_seek (tcurrent->exec_file , (uint32_t) filepos);
-    if (file_read (tcurrent->exec_file, kpage, read_bytes) != (int) read_bytes)
+    if (!swap_out)
     {
-      palloc_free_page (kpage);
-      printf("whatthe 1\n");
-      //kill(f);
-      return ; 
-    }
+      file_seek (tcurrent->exec_file , (uint32_t) filepos);
+      if (file_read (tcurrent->exec_file, kpage, read_bytes) != (int) read_bytes)
+      {
+        palloc_free_page (kpage);
+        printf("whatthe 1\n");
+        return ; 
+      }
       /* Add the page to the process's address space. */
-    if (pagedir_get_page (tcurrent->pagedir, upage) != NULL
+      if (pagedir_get_page (tcurrent->pagedir, upage) != NULL
         || !pagedir_set_page (tcurrent->pagedir, upage, kpage, writable)) 
+      {
+        palloc_free_page (kpage);
+        printf("whatthe 2\n");
+        return ; 
+      }
+      fr_elem = malloc (sizeof(struct frame_elem));
+      fr_elem->pd = tcurrent->pagedir;
+      fr_elem->vaddr = upage;
+      frame_table_push_back(fr_elem);
+    }
+    else
     {
-      palloc_free_page (kpage);
-      printf("whatthe 2\n");
-      //kill(f);
-      return ; 
+      printf("swap in!!!\n");
+      // TODO: swap in
     }
   }
   else
@@ -201,7 +232,7 @@ page_fault (struct intr_frame *f)
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
-  //kill (f);
+  kill (f);
   }
 }
 
