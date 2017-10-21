@@ -152,11 +152,56 @@ page_fault (struct intr_frame *f)
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
+
+  struct thread* tcurrent = thread_current();
+  uint8_t* upage = pg_round_down(fault_addr);
+  struct page* faulted_page = page_lookup (upage, tcurrent);
+  if (faulted_page == NULL)
+  {
+    return;
+  }
+  int filepos = faulted_page->load_filepos;
+  int read_bytes = faulted_page->load_read_bytes;
+  bool writable = faulted_page->writable;
+  if(filepos < 0 || read_bytes < 0)
+  {
+    return;
+  }
+  uint8_t *kpage = palloc_get_page (PAL_USER|PAL_ZERO);
+  if (kpage == NULL)
+  {
+    //kill(f);
+    return false;
+  }
+
+  if(not_present)
+  {
+    file_seek (tcurrent->exec_file , (uint32_t) filepos);
+    if (file_read (tcurrent->exec_file, kpage, read_bytes) != (int) read_bytes)
+    {
+      palloc_free_page (kpage);
+      printf("whatthe 1\n");
+      //kill(f);
+      return ; 
+    }
+      /* Add the page to the process's address space. */
+    if (pagedir_get_page (tcurrent->pagedir, upage) != NULL
+        || !pagedir_set_page (tcurrent->pagedir, upage, kpage, writable)) 
+    {
+      palloc_free_page (kpage);
+      printf("whatthe 2\n");
+      //kill(f);
+      return ; 
+    }
+  }
+  else
+  {
   printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
-  kill (f);
+  //kill (f);
+  }
 }
 

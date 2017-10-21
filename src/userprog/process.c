@@ -187,7 +187,7 @@ process_exit (void)
   {
     i = list_entry(elem_pointer , struct child_elem, elem);
     lock_release(&tcurrent->finding_sema_lock);
-    printf("i : %p, child_tid : %d...\n", i, i->child_tid);
+    //printf("i : %p, child_tid : %d...\n", i, i->child_tid);
     process_wait(i->child_tid);
     lock_acquire(&tcurrent->finding_sema_lock);
     elem_pointer = list_next(elem_pointer);
@@ -206,6 +206,29 @@ process_exit (void)
     palloc_free_page(fi);
   }
   file_lock_release();
+
+  // struct thread의 supplementary_page_table를 deallocate
+  struct hash_iterator* hi;
+  struct page* pi = NULL;
+  supplementary_lock_acquire(tcurrent);
+  /*
+  hash_first (hi, &tcurrent->supplementary_page_table);
+  struct hash_elem* togo = hash_next(hi);
+  while (togo)
+  {
+    printf("hi = %p ",hi);
+    pi = hash_entry (hash_cur (hi), struct page, elem);
+    printf("pi = %p \n",pi);
+    togo = hash_next(hi);
+    if(pi != NULL)
+    {
+      free(pi);
+      pi = NULL;
+    }
+  }
+  */
+  hash_destroy(&tcurrent->supplementary_page_table, (hash_action_func*) remove_page);
+  supplementary_lock_release(tcurrent);
 
   // sema_up 시킬 세마를 찾는다.
   if(tcurrent->tparent->tid == tcurrent->tid) return;
@@ -364,6 +387,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
+  supplementary_lock_acquire(t);
+  hash_init (&t->supplementary_page_table, page_hash, page_less, NULL);
+  supplementary_lock_release(t);
+
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
   for (i = 0; i < ehdr.e_phnum; i++) 
@@ -417,6 +444,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
+              //printf("start_vaddr : %x, start_filepos : %x\n",mem_page,file_page);
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
               {
@@ -520,7 +548,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
-  file_seek (file, ofs);
+  struct thread* tcurrent = thread_current();
+  //printf("load_segment - total read_bytes : %x, total zero_bytes : %x\n", \
+      read_bytes, zero_bytes);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Do calculate how to fill this page.
@@ -529,29 +559,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
+      struct page* pi = malloc (sizeof(struct page));
+      if (pi == NULL)
         return false;
-
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
+      pi->load_vaddr = upage;
+      pi->load_filepos = ofs;
+      pi->load_read_bytes = page_read_bytes;
+      pi->load_zero_bytes = page_zero_bytes;
+      pi->writable = writable;
+      pi->swap_outed = false;
+      pi->swap_index = 0;
+      //printf("hash elem - vaddr : %p, filepos : %p, read_bytes : %x, zero_bytes : %x\n", \
+          upage, ofs, page_read_bytes, page_zero_bytes);
+      supplementary_lock_acquire(tcurrent);
+      hash_insert (&tcurrent->supplementary_page_table, &pi->elem);
+      supplementary_lock_release(tcurrent);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
+      ofs += page_read_bytes;
       upage += PGSIZE;
     }
   return true;

@@ -5,6 +5,14 @@
 #include "threads/synch.h"
 #endif
 
+#ifndef __VM_PAGE_H
+#include "vm/page.h"
+#endif
+
+#ifndef __LIB_KERNEL_HASH_H
+#include "lib/kernel/hash.h"
+#endif
+
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
@@ -132,6 +140,8 @@ struct thread
     int next_fd;
 
     struct file* exec_file;
+    struct hash supplementary_page_table;
+    struct lock supplementary_page_lock;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -185,5 +195,8 @@ struct child_elem* find_child(tid_t tid, struct thread* t);
 
 void file_lock_acquire(void);
 void file_lock_release(void);
+
+void supplementary_lock_acquire(struct thread* t);
+void supplementary_lock_release(struct thread* t);
 
 #endif /* threads/thread.h */

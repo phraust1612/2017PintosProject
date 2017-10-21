@@ -3,6 +3,7 @@
 
 #include "threads/thread.h"
 #include "threads/palloc.h"
+#include "vm/page.h"
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);

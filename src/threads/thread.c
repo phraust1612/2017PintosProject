@@ -526,6 +526,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->next_fd = 2;
   t->child_success = false;
   t->exec_file = NULL;
+  lock_init (&t->supplementary_page_lock);
   sema_init(&t->creation_sema,0);
   list_init(&t->file_list);
   list_init(&t->child_list);
@@ -691,6 +692,16 @@ void
 file_lock_release(void)
 {
   lock_release(&file_rw_lock);
+}
+
+void supplementary_lock_acquire(struct thread* t)
+{
+  lock_acquire(&t->supplementary_page_lock);
+}
+
+void supplementary_lock_release(struct thread* t)
+{
+  lock_release(&t->supplementary_page_lock);
 }
 
 struct child_elem*
