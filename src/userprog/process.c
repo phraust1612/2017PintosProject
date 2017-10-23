@@ -37,10 +37,10 @@ process_execute (const char *file_name)
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
+  fn_copy = palloc_get_page (PAL_ZERO);
   if (fn_copy == NULL)
     return TID_ERROR;
-  fn_copy2 = palloc_get_page (0);
+  fn_copy2 = palloc_get_page (PAL_ZERO);
   if (fn_copy2 == NULL)
   {
     palloc_free_page(fn_copy);
@@ -48,6 +48,18 @@ process_execute (const char *file_name)
   }
   strlcpy (fn_copy, file_name, PGSIZE);
   strlcpy (fn_copy2, file_name, PGSIZE);
+
+  /*
+  int i;
+  char* fn_copy3 = palloc_get_page(0);
+  struct disk* d = disk_get(1,1);
+  for (i=0; i<8; i++)
+    disk_write(d, i, fn_copy + i*DISK_SECTOR_SIZE);
+  for (i=0; i<8; i++)
+    disk_read(d, i, fn_copy3 + i*DISK_SECTOR_SIZE);
+  printf("fn_copy3 : %s...\n", fn_copy3);
+  palloc_free_page(fn_copy3);
+  */
 
   char dummy[200];
   const char* delim = " ";
@@ -65,7 +77,7 @@ process_execute (const char *file_name)
   // c_elem 를 여기서 지역변수로 선언하면 struct thread* 도중의 커널 스택 영역에 할당될 수 있어
   // 스택이 지나가면서 훼손될 우려가 있다. 따라서 별도의 페이지를 할당해서 만들어줘야 한다.
   struct child_elem* c_elem;
-  c_elem = palloc_get_page (0);
+  c_elem = palloc_get_page (PAL_ZERO);
 
   c_elem->child_tid = tid;
   c_elem->exit_status = -1;
@@ -159,27 +171,10 @@ process_exit (void)
   struct thread *tcurrent = thread_current ();
   uint32_t *pd;
 
-  /* Destroy the current process's page directory and switch back
-     to the kernel-only page directory. */
-  pd = tcurrent->pagedir;
-  if (pd != NULL) 
-    {
-      /* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
-         so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
-         directory before destroying the process's page
-         directory, or our active page directory will be one
-         that's been freed (and cleared). */
-      tcurrent->pagedir = NULL;
-      pagedir_activate (NULL);
-      pagedir_destroy (pd);
-    }
-
-  file_close(tcurrent->exec_file);
-
   struct list_elem* elem_pointer = NULL;
   struct child_elem* i = NULL;
+
+  file_close(tcurrent->exec_file);
 
   lock_acquire(&tcurrent->finding_sema_lock);
   elem_pointer = list_begin(&tcurrent->child_list);
@@ -234,6 +229,23 @@ process_exit (void)
     elem_pointer = list_next(elem_pointer);
   }
   lock_release(&tcurrent->tparent->finding_sema_lock);
+
+  /* Destroy the current process's page directory and switch back
+     to the kernel-only page directory. */
+  pd = tcurrent->pagedir;
+  if (pd != NULL) 
+    {
+      /* Correct ordering here is crucial.  We must set
+         cur->pagedir to NULL before switching page directories,
+         so that a timer interrupt can't switch back to the
+         process page directory.  We must activate the base page
+         directory before destroying the process's page
+         directory, or our active page directory will be one
+         that's been freed (and cleared). */
+      tcurrent->pagedir = NULL;
+      pagedir_activate (NULL);
+      pagedir_destroy (pd);
+    }
 
   return;
 }
@@ -347,7 +359,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-  fn_copy = palloc_get_page (0);
+  fn_copy = palloc_get_page (PAL_ZERO);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
@@ -559,7 +571,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       //printf("hash elem - vaddr : %p, filepos : %p, read_bytes : %x, zero_bytes : %x\n", \
           upage, ofs, page_read_bytes, page_zero_bytes);
       supplementary_lock_acquire(tcurrent);
-      hash_insert (&tcurrent->supplementary_page_table, &pi->elem);
+      hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
       supplementary_lock_release(tcurrent);
 
       /* Advance. */
@@ -579,14 +591,17 @@ setup_stack (void **esp, char* arg)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  kpage = palloc_get_page (/* PAL_USER | */PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
         *esp = PHYS_BASE;
       else
+      {
         palloc_free_page (kpage);
+        return false;
+      }
     }
 
   int tmp;
@@ -595,9 +610,12 @@ setup_stack (void **esp, char* arg)
   char* ret_ptr;
   char* next_ptr;
 
-  char** pointer_tmp_stack = palloc_get_page (0);
+  char** pointer_tmp_stack = palloc_get_page (PAL_ZERO);
   if(pointer_tmp_stack == NULL)
+  {
+    palloc_free_page (kpage);
     return false;
+  }
 
   // 스택에 arg 내용을 4바이트 단위씩 저장하고 각각의 포인터를 pointer_tmp_stack에도 저장(그게 argv)
   if( strchr(arg, ' ') == NULL)
@@ -605,8 +623,9 @@ setup_stack (void **esp, char* arg)
     tmp = (int) (strlen(arg) + 4)/4;
     tmp *= 4;
     *esp -= tmp;
-    if(*esp < ebp - 0x100)
+    if(*esp < ebp - 0x1000)
     {
+      palloc_free_page (kpage);
       palloc_free_page(pointer_tmp_stack);
       return false;
     }
@@ -620,8 +639,9 @@ setup_stack (void **esp, char* arg)
     tmp = (int) (strlen(ret_ptr) + 4)/4;
     tmp *= 4;
     *esp -= tmp;
-    if(*esp < ebp - 0x100)
+    if(*esp < ebp - 0x1000)
     {
+      palloc_free_page (kpage);
       palloc_free_page(pointer_tmp_stack);
       return false;
     }
@@ -636,8 +656,9 @@ setup_stack (void **esp, char* arg)
 
   // argv[] 를 스택에 저장
   *esp -= argc * sizeof(char*);
-  if(*esp < ebp - 0x100)
+  if(*esp < ebp - 0x1000)
   {
+    palloc_free_page (kpage);
     palloc_free_page(pointer_tmp_stack);
     return false;
   }
@@ -648,20 +669,22 @@ setup_stack (void **esp, char* arg)
 
   char* tmpp = *esp;
   *esp -= sizeof(char**);
-  if(*esp < ebp - 0x100)
+  if(*esp < ebp - 0x1000)
     return false;
   memcpy(*esp, &tmpp, sizeof(char **));
 
   // argc 를 스택에 저장
   *esp -= sizeof(int);
-  if(*esp < ebp - 0x100)
+  if(*esp < ebp - 0x1000)
     return false;
   memcpy(*esp, &argc, sizeof(int));
 
   // return address 크기만큼 스택에 저장.
   *esp -= sizeof(void*);
-  if(*esp < ebp - 0x100)
+  if(*esp < ebp - 0x1000)
     return false;
+
+  //hex_dump(0, *esp, 100, true);
 
   return success;
 }

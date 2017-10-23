@@ -155,9 +155,15 @@ page_fault (struct intr_frame *f)
 
   struct thread* tcurrent = thread_current();
   uint8_t* upage = pg_round_down(fault_addr);
+  // tcurrent안의 supplementary_page_table에서 미리
+  // 저장된 upage에 대응하는 페이지를 찾는다.
+  // (이는 lazy load segment할 때 저장해놓았을 것이다.)
   struct page* faulted_page = page_lookup (upage, tcurrent);
   if (faulted_page == NULL)
   {
+    // printf ("not found from supplementary page table, \
+        upage : %p, tcurrent : %p, tcurrent->pd : %p...\n", \
+        upage, tcurrent, tcurrent->pagedir);
     kill(f);
     return;
   }
@@ -175,24 +181,39 @@ page_fault (struct intr_frame *f)
   disk_sector_t i;
   int count;
   struct frame_elem* fr_elem;
-  void* victim_paddr;
+  uint8_t* victim_kvaddr;
   if (kpage == NULL)
   {
     // TODO: swap out
     struct disk* d = disk_get(1,1);
     jeonduhwan = swap_table_scan_and_flip();
     fr_elem = frame_table_find_victim();
-    victim_paddr = pagedir_get_page(fr_elem->pd, fr_elem->vaddr);
+    ASSERT(fr_elem != NULL);
+
+    /*
+    struct page* victim_page = page_lookup(fr_elem->vaddr, fr_elem->pd_thread);
+    victim_page->swap_outed = true;
+    victim_page->swap_index = jeonduhwan;
+    */
+    ASSERT (page_swap_out_index (fr_elem->vaddr, fr_elem->pd_thread, true, jeonduhwan));
+    victim_kvaddr = pagedir_get_page(fr_elem->pd, fr_elem->vaddr);
     count = 0;
+    ASSERT(victim_kvaddr);
     for (i = jeonduhwan*8; i<jeonduhwan*8+8; i++)
     {
-      disk_write(d, i, victim_paddr + count*DISK_SECTOR_SIZE);
+      disk_write(d, i, victim_kvaddr + count*DISK_SECTOR_SIZE);
       count++;
     }
-    palloc_free_page(victim_paddr);
+    // 1. victim의 pd 가리키는 내용 등에 대해 수정
+    // 2. 추가적인 같은 alias 고려 - mmap 이후 하기로...
+
+    pagedir_clear_page(fr_elem->pd, fr_elem->vaddr);
+    palloc_free_page(victim_kvaddr);
     free (fr_elem);
+
     kpage = palloc_get_page (PAL_USER|PAL_ZERO);
     if (kpage == NULL) return;
+    //printf("after swap out, frame_table size : %d...\n", frame_table_size());
   }
 
   if(not_present)
@@ -217,12 +238,44 @@ page_fault (struct intr_frame *f)
       fr_elem = malloc (sizeof(struct frame_elem));
       fr_elem->pd = tcurrent->pagedir;
       fr_elem->vaddr = upage;
+      fr_elem->pd_thread = tcurrent;
       frame_table_push_back(fr_elem);
+      //printf ("lazy load, frame table size : %d...\n",frame_table_size());
     }
     else
     {
-      printf("swap in!!!\n");
       // TODO: swap in
+      struct disk* d = disk_get(1,1);
+      count = 0;
+      for (i = swap_index*8; i<swap_index*8+8; i++)
+      {
+        disk_read (d, i, kpage + count*DISK_SECTOR_SIZE);
+        count++;
+      }
+      // 1. victim의 pd 가리키는 내용 등에 대해 수정
+      // 2. 추가적인 같은 alias 고려 - mmap 이후 하기로...
+      /* supplementary_lock_acquire(tcurrent);
+      faulted_page->swap_outed = false;
+      faulted_page->swap_index = 0;
+      supplementary_lock_release(tcurrent); */
+      page_swap_out_index (upage, tcurrent, false, 0);
+      swap_table_bitmap_set (swap_index, false);
+
+      fr_elem = malloc (sizeof(struct frame_elem));
+      fr_elem->pd = tcurrent->pagedir;
+      fr_elem->vaddr = upage;
+      fr_elem->pd_thread = tcurrent;
+      frame_table_push_back(fr_elem);
+
+      /* Add the page to the process's address space. */
+      if (pagedir_get_page (tcurrent->pagedir, upage) != NULL
+        || !pagedir_set_page (tcurrent->pagedir, upage, kpage, writable)) 
+      {
+        palloc_free_page (kpage);
+        printf("whatthe 2\n");
+        return ; 
+      }
+      //printf ("swap in, frame table size : %d...\n",frame_table_size());
     }
   }
   else

@@ -11,7 +11,7 @@
 struct page
 {
   struct hash_elem elem;
-  uint32_t load_vaddr;
+  uint32_t load_vaddr;  /* user virtual addr */
   uint32_t load_filepos;
   uint32_t load_read_bytes;
   uint32_t load_zero_bytes;
@@ -23,6 +23,7 @@ struct page
 unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
 struct page * page_lookup (const void *address, struct thread* tcurrent);
+bool page_swap_out_index (const void *address, struct thread* tcurrent, bool new_swap_outed, uint32_t new_index);
 void remove_page (struct hash_elem* target_elem, void *aux UNUSED);
 int find_filepos(uint8_t* upage, struct thread* tcurrent);
 int find_read_bytes(uint8_t* upage, struct thread* tcurrent);

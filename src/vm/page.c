@@ -22,15 +22,50 @@ page_less (const struct hash_elem *a_, const struct hash_elem *b_,
 struct page *
 page_lookup (const void *address, struct thread* tcurrent)
 {
+  ASSERT (tcurrent != NULL);
   supplementary_lock_acquire(tcurrent);
   struct page *p = malloc (sizeof(struct page));
   struct hash_elem *e;
-  p->load_vaddr = address;
+  if (p == NULL) return NULL;
+  p->load_vaddr = pg_round_down(address);
   e = hash_find (&tcurrent->supplementary_page_table, &p->elem);
   struct page* ans = e != NULL ?  hash_entry (e, struct page, elem) : NULL;
   supplementary_lock_release(tcurrent);
   free(p);
   return ans;
+}
+
+bool
+page_swap_out_index (const void *address, struct thread* tcurrent, bool new_swap_outed, uint32_t new_index)
+{
+  ASSERT (tcurrent != NULL);
+  ASSERT (!hash_empty (&tcurrent->supplementary_page_table));
+  supplementary_lock_acquire(tcurrent);
+  struct page *p = malloc (sizeof(struct page));
+  struct hash_elem *e;
+  if (p == NULL) return false;
+  p->load_vaddr = pg_round_down(address);
+  e = hash_find (&tcurrent->supplementary_page_table, &p->elem);
+  struct page* prev_p = e != NULL ?  hash_entry (e, struct page, elem) : NULL;
+  if (prev_p)
+  {
+    p->load_filepos = prev_p->load_filepos;
+    p->load_read_bytes = prev_p->load_read_bytes;
+    p->load_zero_bytes = prev_p->load_zero_bytes;
+    p->writable = prev_p->writable;
+    p->swap_outed = new_swap_outed;
+    p->swap_index = new_index;
+    hash_replace (&tcurrent->supplementary_page_table, &p->elem);
+    free (prev_p);
+    supplementary_lock_release(tcurrent);
+    return true;;
+  }
+  else
+  {
+    free(p);
+    supplementary_lock_release(tcurrent);
+    return false;
+  }
 }
 
 void remove_page (struct hash_elem* target_elem, void *aux UNUSED)

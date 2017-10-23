@@ -1,32 +1,36 @@
 #include "vm/swap.h"
 
-struct swappp
-{
-  struct bitmap *bb;
-};
 
 static struct list frame_table;
-static struct swappp swap_table;
+static struct bitmap* swap_table;
 static struct lock frame_lock;
+static struct lock swap_lock;
 
 void swap_table_bitmap_init (void)
 {
   struct disk* d = disk_get(1,1);
   disk_sector_t ss = disk_size(d);
   ss /= 8;
-  swap_table.bb = bitmap_create(1024);
+  swap_table = bitmap_create(ss);
+  lock_init (&swap_lock);
 }
 
 void
 swap_table_bitmap_set (size_t idx, bool toset)
 {
-  bitmap_set(swap_table.bb, idx, toset);
+  lock_acquire (&swap_lock);
+  bitmap_set(swap_table, idx, toset);
+  lock_release (&swap_lock);
 }
 
 size_t
 swap_table_scan_and_flip (void)
 {
-  return bitmap_scan_and_flip (swap_table.bb, 0, 1, false);
+  size_t ans;
+  lock_acquire (&swap_lock);
+  ans = bitmap_scan_and_flip (swap_table, 0, 1, false);
+  lock_release (&swap_lock);
+  return ans;
 }
 
 void
@@ -49,13 +53,28 @@ frame_table_find_victim (void)
 {
   lock_acquire (&frame_lock);
   struct frame_elem* totest;
-  for(totest = list_pop_front (&frame_table);
-      pagedir_is_accessed (totest->pd, totest->vaddr);
-      totest = list_pop_front (&frame_table))
+  struct list_elem* elem_pointer;
+  size_t next_size, prev_size = frame_table_size();
+  if (list_empty (&frame_table)) return NULL;
+
+  elem_pointer = list_pop_front(&frame_table);
+  totest = list_entry (elem_pointer, struct frame_elem, elem);
+    //printf("totest : %p, totest->pd : %p, totest->vaddr : %p...\n",\
+        totest, totest->pd, totest->vaddr);
+  while(pagedir_is_accessed (totest->pd, totest->vaddr))
   {
     pagedir_set_accessed (totest->pd, totest->vaddr, false);
-    list_push_back (&frame_table, totest);
+    list_push_back (&frame_table, elem_pointer);
+    elem_pointer = list_pop_front (&frame_table);
+    totest = list_entry (elem_pointer, struct frame_elem, elem);
+    //printf("totest : %p, totest->pd : %p, totest->vaddr : %p...\n",\
+        totest, totest->pd, totest->vaddr);
   }
+  next_size = frame_table_size();
+  ASSERT (is_kernel_vaddr(totest));
+  ASSERT (is_user_vaddr(totest->vaddr));
+  ASSERT (next_size == prev_size - 1);
+  ASSERT (totest->pd_thread != NULL);
 
   lock_release (&frame_lock);
   return totest;
@@ -80,3 +99,10 @@ frame_table_delete (uint32_t pd)
   }
   lock_release (&frame_lock);
 }
+
+size_t
+frame_table_size (void)
+{
+  return list_size (&frame_table);
+}
+

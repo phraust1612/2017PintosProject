@@ -183,8 +183,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       else
       {
         f->eax = -1;
-        printf("arg : %p, %d, buffer : %p, %p, size : %p, %d...\n", \
-            arg, *arg, arg+1, *(arg+1), size, *size);
         printf("%s: exit(%d)\n", tcurrent->name, -1);
         thread_exit();
       }
@@ -300,7 +298,10 @@ check_valid_pointer (void* pointer)
 
   void* get_page = pagedir_get_page(pd, pointer);
   if (!get_page)
-    return false;
+  {
+    if(page_lookup (pointer, tcurrent)) return true;
+    else return false;
+  }
 
   return true;
 }

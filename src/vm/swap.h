@@ -9,6 +9,7 @@
 struct frame_elem
 {
   struct list_elem elem;
+  struct thread* pd_thread;
   uint32_t *pd;
   void* vaddr; /* corresponding page pointer */
 };
@@ -21,5 +22,6 @@ void frame_table_init (void);
 void frame_table_push_back (struct frame_elem* e);
 struct frame_elem* frame_table_find_victim (void);
 void frame_table_delete (uint32_t pd);
+size_t frame_table_size (void);
 
 #endif
