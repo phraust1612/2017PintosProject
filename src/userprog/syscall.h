@@ -8,6 +8,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "devices/input.h"
+#include "vm/page.h"
 
 void file_lock_init(void);
 void syscall_init (void);

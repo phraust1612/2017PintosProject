@@ -18,6 +18,7 @@ struct page
   bool writable;
   bool swap_outed;  /* if true, find this from swap disk */
   uint32_t swap_index;
+  bool is_stack;
 };
 
 unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);

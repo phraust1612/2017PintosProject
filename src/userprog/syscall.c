@@ -20,6 +20,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   int* arg;
   const char* buffer;
   int* size;
+  //struct page* pi;
   struct file_elem* f_elem;
   struct child_elem* t_elem;
   struct thread* tcurrent = thread_current();
@@ -170,7 +171,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         else
         {
           f_elem = find_file(*arg);
-          if(f_elem != NULL)
+          if(f_elem != NULL/* && pagedir_is_writable(tcurrent->pagedir, buffer) */)
           {
             file_lock_acquire();
             f->eax = file_read(f_elem->f, (void*)buffer, (int) *size);

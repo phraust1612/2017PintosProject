@@ -202,13 +202,6 @@ process_exit (void)
   }
   file_lock_release();
 
-  // struct thread의 supplementary_page_table를 deallocate
-  struct hash_iterator* hi;
-  struct page* pi = NULL;
-  supplementary_lock_acquire(tcurrent);
-  hash_destroy(&tcurrent->supplementary_page_table, (hash_action_func*) remove_page);
-  supplementary_lock_release(tcurrent);
-
   // frame_table에서 이 프로세스에 해당하는 frame_elem deallocate
   frame_table_delete (tcurrent->pagedir);
 
@@ -229,6 +222,11 @@ process_exit (void)
     elem_pointer = list_next(elem_pointer);
   }
   lock_release(&tcurrent->tparent->finding_sema_lock);
+
+  // supplementary page table이 더 늦게 삭제되어야 한다.
+  supplementary_lock_acquire(tcurrent);
+  hash_destroy(&tcurrent->supplementary_page_table, (hash_action_func*) remove_page);
+  supplementary_lock_release(tcurrent);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -568,6 +566,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       pi->writable = writable;
       pi->swap_outed = false;
       pi->swap_index = 0;
+      pi->is_stack = false;
       //printf("hash elem - vaddr : %p, filepos : %p, read_bytes : %x, zero_bytes : %x\n", \
           upage, ofs, page_read_bytes, page_zero_bytes);
       supplementary_lock_acquire(tcurrent);
@@ -603,6 +602,24 @@ setup_stack (void **esp, char* arg)
         return false;
       }
     }
+
+  /*
+  struct thread* tcurrent = thread_current();
+  struct page* pi = malloc (sizeof(struct page));
+  if (pi == NULL)
+    return false;
+  pi->load_vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  pi->load_filepos = 0;
+  pi->load_read_bytes = 0;
+  pi->load_zero_bytes = PGSIZE;
+  pi->writable = false;
+  pi->swap_outed = false;
+  pi->swap_index = 0;
+  pi->is_stack = true;
+  supplementary_lock_acquire(tcurrent);
+  hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
+  supplementary_lock_release(tcurrent);
+  */
 
   int tmp;
   int* ebp = (int*)*esp;

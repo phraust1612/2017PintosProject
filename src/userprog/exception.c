@@ -153,42 +153,21 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
-  struct thread* tcurrent = thread_current();
-  uint8_t* upage = pg_round_down(fault_addr);
-  // tcurrent안의 supplementary_page_table에서 미리
-  // 저장된 upage에 대응하는 페이지를 찾는다.
-  // (이는 lazy load segment할 때 저장해놓았을 것이다.)
-  struct page* faulted_page = page_lookup (upage, tcurrent);
-  if (faulted_page == NULL)
-  {
-    // printf ("not found from supplementary page table, \
-        upage : %p, tcurrent : %p, tcurrent->pd : %p...\n", \
-        upage, tcurrent, tcurrent->pagedir);
-    kill(f);
-    return;
-  }
-  uint32_t filepos = faulted_page->load_filepos;
-  uint32_t read_bytes = faulted_page->load_read_bytes;
-  bool writable = faulted_page->writable;
-  bool swap_out = faulted_page->swap_outed;
-  uint32_t swap_index = faulted_page->swap_index;
-  if(filepos < 0 || read_bytes < 0)
-  {
-    return;
-  }
   uint8_t *kpage = palloc_get_page (PAL_USER|PAL_ZERO);
+  struct frame_elem* fr_elem;
   size_t jeonduhwan;
   disk_sector_t i;
   int count;
-  struct frame_elem* fr_elem;
-  uint8_t* victim_kvaddr;
   if (kpage == NULL)
   {
-    // TODO: swap out
+    // swap out
     struct disk* d = disk_get(1,1);
     jeonduhwan = swap_table_scan_and_flip();
     fr_elem = frame_table_find_victim();
     ASSERT(fr_elem != NULL);
+  
+    uint8_t* victim_kvaddr = pagedir_get_page(fr_elem->pd, fr_elem->vaddr);
+    ASSERT(victim_kvaddr);
 
     /*
     struct page* victim_page = page_lookup(fr_elem->vaddr, fr_elem->pd_thread);
@@ -196,9 +175,7 @@ page_fault (struct intr_frame *f)
     victim_page->swap_index = jeonduhwan;
     */
     ASSERT (page_swap_out_index (fr_elem->vaddr, fr_elem->pd_thread, true, jeonduhwan));
-    victim_kvaddr = pagedir_get_page(fr_elem->pd, fr_elem->vaddr);
     count = 0;
-    ASSERT(victim_kvaddr);
     for (i = jeonduhwan*8; i<jeonduhwan*8+8; i++)
     {
       disk_write(d, i, victim_kvaddr + count*DISK_SECTOR_SIZE);
@@ -213,11 +190,71 @@ page_fault (struct intr_frame *f)
 
     kpage = palloc_get_page (PAL_USER|PAL_ZERO);
     if (kpage == NULL) return;
-    //printf("after swap out, frame_table size : %d...\n", frame_table_size());
+  }
+
+  struct thread* tcurrent = thread_current();
+  uint8_t* upage = pg_round_down(fault_addr);
+  // tcurrent안의 supplementary_page_table에서 미리
+  // 저장된 upage에 대응하는 페이지를 찾는다.
+  // (이는 lazy load segment할 때 저장해놓았을 것이다.)
+  struct page* faulted_page = page_lookup (upage, tcurrent);
+  if (faulted_page == NULL)
+  {
+    // do stack growth
+    // if (pg_round_up (fault_addr) == pg_round_down(f->ebp))
+    if (fault_addr > f->esp - 0x100 && fault_addr < f->ebp)
+    {
+      palloc_free_page (kpage);
+      kpage = palloc_get_page (PAL_ZERO);
+
+      /*
+      struct page* pi = malloc (sizeof(struct page));
+      if (pi == NULL)
+        return false;
+      pi->load_vaddr = upage;
+      pi->load_filepos = 0;
+      pi->load_read_bytes = 0;
+      pi->load_zero_bytes = PGSIZE;
+      pi->writable = false;
+      pi->swap_outed = false;
+      pi->swap_index = 0;
+      pi->is_stack = true;
+      supplementary_lock_acquire(tcurrent);
+      hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
+      supplementary_lock_release(tcurrent);
+      */
+
+      /* Add the page to the process's address space. */
+      if (pagedir_get_page (tcurrent->pagedir, upage) != NULL
+        || !pagedir_set_page (tcurrent->pagedir, upage, kpage, true)) 
+      {
+        palloc_free_page (kpage);
+        printf("whatthe 4\n");
+      }
+      return ; 
+    }
+    else
+    {
+    // printf ("not found from supplementary page table, \
+        upage : %p, tcurrent : %p, tcurrent->pd : %p...\n", \
+        upage, tcurrent, tcurrent->pagedir);
+      kill(f);
+      return;
+    }
+  }
+  uint32_t filepos = faulted_page->load_filepos;
+  uint32_t read_bytes = faulted_page->load_read_bytes;
+  bool writable = faulted_page->writable;
+  bool swap_out = faulted_page->swap_outed;
+  uint32_t swap_index = faulted_page->swap_index;
+  if(filepos < 0 || read_bytes < 0)
+  {
+    return;
   }
 
   if(not_present)
   {
+    // do lazy load
     if (!swap_out)
     {
       file_seek (tcurrent->exec_file , (uint32_t) filepos);
@@ -240,11 +277,10 @@ page_fault (struct intr_frame *f)
       fr_elem->vaddr = upage;
       fr_elem->pd_thread = tcurrent;
       frame_table_push_back(fr_elem);
-      //printf ("lazy load, frame table size : %d...\n",frame_table_size());
     }
     else
     {
-      // TODO: swap in
+      // swap in
       struct disk* d = disk_get(1,1);
       count = 0;
       for (i = swap_index*8; i<swap_index*8+8; i++)
@@ -252,13 +288,23 @@ page_fault (struct intr_frame *f)
         disk_read (d, i, kpage + count*DISK_SECTOR_SIZE);
         count++;
       }
+
+      /* Add the page to the process's address space. */
+      if (pagedir_get_page (tcurrent->pagedir, upage) != NULL
+        || !pagedir_set_page (tcurrent->pagedir, upage, kpage, writable)) 
+      {
+        palloc_free_page (kpage);
+        printf("whatthe 3\n");
+        return ; 
+      }
+
       // 1. victim의 pd 가리키는 내용 등에 대해 수정
       // 2. 추가적인 같은 alias 고려 - mmap 이후 하기로...
       /* supplementary_lock_acquire(tcurrent);
       faulted_page->swap_outed = false;
       faulted_page->swap_index = 0;
       supplementary_lock_release(tcurrent); */
-      page_swap_out_index (upage, tcurrent, false, 0);
+      ASSERT (page_swap_out_index (upage, tcurrent, false, 0));
       swap_table_bitmap_set (swap_index, false);
 
       fr_elem = malloc (sizeof(struct frame_elem));
@@ -266,16 +312,6 @@ page_fault (struct intr_frame *f)
       fr_elem->vaddr = upage;
       fr_elem->pd_thread = tcurrent;
       frame_table_push_back(fr_elem);
-
-      /* Add the page to the process's address space. */
-      if (pagedir_get_page (tcurrent->pagedir, upage) != NULL
-        || !pagedir_set_page (tcurrent->pagedir, upage, kpage, writable)) 
-      {
-        palloc_free_page (kpage);
-        printf("whatthe 2\n");
-        return ; 
-      }
-      //printf ("swap in, frame table size : %d...\n",frame_table_size());
     }
   }
   else
