@@ -106,3 +106,16 @@ frame_table_size (void)
   return list_size (&frame_table);
 }
 
+void
+frame_lock_try_release (struct thread* t)
+{
+  if (frame_lock.holder == t)
+    lock_release (&frame_lock);
+}
+
+void
+swap_lock_try_release (struct thread* t)
+{
+  if (swap_lock.holder == t)
+    lock_release (&swap_lock);
+}

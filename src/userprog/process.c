@@ -174,6 +174,10 @@ process_exit (void)
   struct list_elem* elem_pointer = NULL;
   struct child_elem* i = NULL;
 
+  frame_lock_try_release (tcurrent);
+  swap_lock_try_release (tcurrent);
+  file_lock_try_release (tcurrent);
+
   file_close(tcurrent->exec_file);
 
   lock_acquire(&tcurrent->finding_sema_lock);

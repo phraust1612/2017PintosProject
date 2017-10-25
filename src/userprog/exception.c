@@ -84,21 +84,21 @@ kill (struct intr_frame *f)
   switch (f->cs)
     {
     case SEL_UCSEG:
+    case SEL_KCSEG:
       /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
-      printf ("%s: dying due to interrupt %#04x (%s).\n",
+      // printf ("%s: dying due to interrupt %#04x (%s).\n", \
               thread_name (), f->vec_no, intr_name (f->vec_no));
-      intr_dump_frame (f);
+      //intr_dump_frame (f);
       printf("%s: exit(%d)\n", thread_current()->name, -1);
       thread_exit (); 
 
-    case SEL_KCSEG:
       /* Kernel's code segment, which indicates a kernel bug.
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
-      intr_dump_frame (f);
-      PANIC ("Kernel bug - unexpected interrupt in kernel"); 
+//      intr_dump_frame (f);
+//      PANIC ("Kernel bug - unexpected interrupt in kernel"); 
 
     default:
       /* Some other code segment?  Shouldn't happen.  Panic the
@@ -202,7 +202,8 @@ page_fault (struct intr_frame *f)
   {
     // do stack growth
     // if (pg_round_up (fault_addr) == pg_round_down(f->ebp))
-    if (fault_addr > f->esp - 0x100 && fault_addr < f->ebp)
+    if ((fault_addr > f->esp - 0x900 || fault_addr > tcurrent->user_esp - 0x100)
+        && is_user_vaddr(fault_addr))
     {
       palloc_free_page (kpage);
       kpage = palloc_get_page (PAL_ZERO);
@@ -316,12 +317,14 @@ page_fault (struct intr_frame *f)
   }
   else
   {
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
+    /*
+    printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
-  kill (f);
+          */
+    kill (f);
   }
 }
 

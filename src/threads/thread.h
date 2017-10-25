@@ -147,6 +147,8 @@ struct thread
     struct hash supplementary_page_table;
     struct lock supplementary_page_lock;
 
+    void* user_esp;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -199,6 +201,7 @@ struct child_elem* find_child(tid_t tid, struct thread* t);
 
 void file_lock_acquire(void);
 void file_lock_release(void);
+void file_lock_try_release (struct thread* t);
 
 void supplementary_lock_acquire(struct thread* t);
 void supplementary_lock_release(struct thread* t);

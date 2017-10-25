@@ -24,4 +24,7 @@ struct frame_elem* frame_table_find_victim (void);
 void frame_table_delete (uint32_t pd);
 size_t frame_table_size (void);
 
+void frame_lock_try_release (struct thread* t);
+void swap_lock_try_release (struct thread* t);
+
 #endif

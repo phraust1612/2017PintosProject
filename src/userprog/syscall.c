@@ -6,7 +6,7 @@
 #include "threads/vaddr.h"
 
 static void syscall_handler (struct intr_frame *);
-bool check_valid_pointer (void* pointer);
+bool check_valid_pointer (void* pointer, struct intr_frame* f);
 
 void
 syscall_init (void) 
@@ -24,8 +24,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   struct file_elem* f_elem;
   struct child_elem* t_elem;
   struct thread* tcurrent = thread_current();
+  tcurrent->user_esp = f->esp;
 
-  if(!check_valid_pointer(f->esp))
+  if(!check_valid_pointer(f->esp, f))
   {
     buffer = (const char*) tcurrent->name;
     printf("%s: exit(%d)\n", buffer, -1);
@@ -40,7 +41,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_EXIT:
       arg = (int*)f->esp + 1;
       buffer = (const char*) tcurrent->name;
-      if(!check_valid_pointer(arg))
+      if(!check_valid_pointer(arg, f))
         printf("%s: exit(%d)\n", buffer, -1);
       else
       {
@@ -52,7 +53,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_EXEC:
       buffer = (const char*)* ((int*)f->esp + 1);
-      if(check_valid_pointer((void*) buffer))
+      if(check_valid_pointer((void*) buffer, f))
       {
         f->eax = process_execute(buffer);
       }
@@ -65,7 +66,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_WAIT:
       arg = (int*)f->esp + 1;  // 
-      if(check_valid_pointer(arg))
+      if(check_valid_pointer(arg, f))
         f->eax = process_wait((tid_t) *arg);
       else
       {
@@ -78,7 +79,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       buffer = (const char*)* ((int*)f->esp + 1);
       size = (int*)f->esp+2;
       // return 값은 eax로 넘겨준다.
-      if(check_valid_pointer((void*)buffer) && check_valid_pointer(size))
+      if(check_valid_pointer((void*)buffer, f) && check_valid_pointer(size, f))
       {
         file_lock_acquire();
         f->eax = filesys_create((const char*)buffer, (int) *size);
@@ -93,7 +94,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_REMOVE:
       buffer = (const char*)* ((int*)f->esp + 1);
-      if(check_valid_pointer((void*) buffer))
+      if(check_valid_pointer((void*) buffer, f))
       {
         file_lock_acquire();
         f->eax = filesys_remove ((const char*)buffer);
@@ -108,7 +109,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_OPEN:
       buffer = (const char*)* ((int*)f->esp + 1);
-      if(check_valid_pointer((void*)buffer))
+      if(check_valid_pointer((void*)buffer, f))
       {
         f_elem = palloc_get_page(PAL_ZERO);
         if(f_elem == NULL)
@@ -141,7 +142,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_FILESIZE:
       arg = (int*)f->esp + 1; // fd
-      if(check_valid_pointer(arg))
+      if(check_valid_pointer(arg, f))
       {
         f_elem = find_file(*arg);
         if(f_elem != NULL)
@@ -163,8 +164,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       arg = (int*)f->esp + 1; // fd
       buffer = (const char*)* ((int*)f->esp + 2);
       size = (int*)f->esp+3;
-      if(check_valid_pointer(arg) && check_valid_pointer((void*)buffer)
-          && check_valid_pointer(size))
+      if(check_valid_pointer(arg, f) && check_valid_pointer((void*)buffer, f)
+          && check_valid_pointer(size, f))
       {
         if(*arg == 0)
           f->eax = input_getc();
@@ -192,8 +193,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       arg = (int*)f->esp + 1;  // fd
       buffer = (const char*)* ((int*)f->esp + 2);
       size = (int*)f->esp+3;
-      if(check_valid_pointer(arg) && check_valid_pointer((void*)buffer)
-          && check_valid_pointer(size))
+      if(check_valid_pointer(arg, f) && check_valid_pointer((void*)buffer, f)
+          && check_valid_pointer(size, f))
       {
         // fd 가 stdout(1) 의 경우
         if(*arg == 1)
@@ -226,7 +227,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_SEEK:
       arg = (int*)f->esp + 1; // fd
       size = (int*)f->esp + 2; //position
-      if(check_valid_pointer(arg) && check_valid_pointer(size))
+      if(check_valid_pointer(arg, f) && check_valid_pointer(size, f))
       {
         f_elem = find_file(*arg);
         if(f_elem != NULL)
@@ -244,7 +245,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_TELL:
       arg = (int*)f->esp + 1; // fd
-      if(check_valid_pointer(arg))
+      if(check_valid_pointer(arg, f))
       {
         f_elem = find_file(*arg);
         if(f_elem != NULL)
@@ -263,7 +264,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_CLOSE:
       arg = (int*)f->esp + 1; // fd
-      if(check_valid_pointer(arg))
+      if(check_valid_pointer(arg, f))
       {
         f_elem = find_file(*arg);
         if(f_elem != NULL)
@@ -291,7 +292,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 // false면 free/release해야할 상황이 있을 수 있음.
 bool
-check_valid_pointer (void* pointer)
+check_valid_pointer (void* pointer, struct intr_frame* f)
 {
   struct thread* tcurrent = thread_current();
   uint32_t *pd = tcurrent->pagedir;
@@ -300,7 +301,8 @@ check_valid_pointer (void* pointer)
   void* get_page = pagedir_get_page(pd, pointer);
   if (!get_page)
   {
-    if(page_lookup (pointer, tcurrent)) return true;
+    if (page_lookup (pointer, tcurrent)) return true;
+    else if (pointer > f->esp) return true; /* stack page에 있을 경우로 예상됨 */
     else return false;
   }
 
