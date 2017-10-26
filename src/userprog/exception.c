@@ -97,6 +97,7 @@ kill (struct intr_frame *f)
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
+//    case SEL_KCSEG:
 //      intr_dump_frame (f);
 //      PANIC ("Kernel bug - unexpected interrupt in kernel"); 
 
@@ -153,30 +154,32 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
+  struct thread* tcurrent = thread_current();
+  void* user_esp;
+  if (is_user_vaddr (f->esp))
+    set_new_dirty_page (f->esp, tcurrent);
+  ASSERT (is_user_vaddr (tcurrent->user_esp));
+
   uint8_t *kpage = palloc_get_page (PAL_USER|PAL_ZERO);
   struct frame_elem* fr_elem;
-  size_t jeonduhwan;
+  size_t swapping_index;
   disk_sector_t i;
   int count;
   if (kpage == NULL)
   {
     // swap out
     struct disk* d = disk_get(1,1);
-    jeonduhwan = swap_table_scan_and_flip();
+    swapping_index = swap_table_scan_and_flip();
+
     fr_elem = frame_table_find_victim();
     ASSERT(fr_elem != NULL);
   
     uint8_t* victim_kvaddr = pagedir_get_page(fr_elem->pd, fr_elem->vaddr);
     ASSERT(victim_kvaddr);
 
-    /*
-    struct page* victim_page = page_lookup(fr_elem->vaddr, fr_elem->pd_thread);
-    victim_page->swap_outed = true;
-    victim_page->swap_index = jeonduhwan;
-    */
-    ASSERT (page_swap_out_index (fr_elem->vaddr, fr_elem->pd_thread, true, jeonduhwan));
+    ASSERT (page_swap_out_index (fr_elem->vaddr, fr_elem->pd_thread, true, swapping_index));
     count = 0;
-    for (i = jeonduhwan*8; i<jeonduhwan*8+8; i++)
+    for (i = swapping_index*8; i<swapping_index*8+8; i++)
     {
       disk_write(d, i, victim_kvaddr + count*DISK_SECTOR_SIZE);
       count++;
@@ -189,10 +192,10 @@ page_fault (struct intr_frame *f)
     free (fr_elem);
 
     kpage = palloc_get_page (PAL_USER|PAL_ZERO);
+    swap_lock_release ();
     if (kpage == NULL) return;
   }
 
-  struct thread* tcurrent = thread_current();
   uint8_t* upage = pg_round_down(fault_addr);
   // tcurrent안의 supplementary_page_table에서 미리
   // 저장된 upage에 대응하는 페이지를 찾는다.
@@ -201,14 +204,9 @@ page_fault (struct intr_frame *f)
   if (faulted_page == NULL)
   {
     // do stack growth
-    // if (pg_round_up (fault_addr) == pg_round_down(f->ebp))
-    if ((fault_addr > f->esp - 0x900 || fault_addr > tcurrent->user_esp - 0x100)
+    if (fault_addr > tcurrent->user_esp - 0x100
         && is_user_vaddr(fault_addr))
     {
-      palloc_free_page (kpage);
-      kpage = palloc_get_page (PAL_ZERO);
-
-      /*
       struct page* pi = malloc (sizeof(struct page));
       if (pi == NULL)
         return false;
@@ -216,14 +214,18 @@ page_fault (struct intr_frame *f)
       pi->load_filepos = 0;
       pi->load_read_bytes = 0;
       pi->load_zero_bytes = PGSIZE;
-      pi->writable = false;
+      pi->writable = true;
       pi->swap_outed = false;
       pi->swap_index = 0;
-      pi->is_stack = true;
       supplementary_lock_acquire(tcurrent);
       hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
       supplementary_lock_release(tcurrent);
-      */
+
+      fr_elem = malloc (sizeof(struct frame_elem));
+      fr_elem->pd = tcurrent->pagedir;
+      fr_elem->vaddr = upage;
+      fr_elem->pd_thread = tcurrent;
+      frame_table_push_back(fr_elem);
 
       /* Add the page to the process's address space. */
       if (pagedir_get_page (tcurrent->pagedir, upage) != NULL
@@ -237,8 +239,8 @@ page_fault (struct intr_frame *f)
     else
     {
     // printf ("not found from supplementary page table, \
-        upage : %p, tcurrent : %p, tcurrent->pd : %p...\n", \
-        upage, tcurrent, tcurrent->pagedir);
+        \norigin : %p, upage : %p, tcurrent_tid : %d, user_esp : %p...\n", \
+        fault_addr, upage, tcurrent->tid, tcurrent->user_esp);
       kill(f);
       return;
     }
@@ -301,10 +303,6 @@ page_fault (struct intr_frame *f)
 
       // 1. victim의 pd 가리키는 내용 등에 대해 수정
       // 2. 추가적인 같은 alias 고려 - mmap 이후 하기로...
-      /* supplementary_lock_acquire(tcurrent);
-      faulted_page->swap_outed = false;
-      faulted_page->swap_index = 0;
-      supplementary_lock_release(tcurrent); */
       ASSERT (page_swap_out_index (upage, tcurrent, false, 0));
       swap_table_bitmap_set (swap_index, false);
 

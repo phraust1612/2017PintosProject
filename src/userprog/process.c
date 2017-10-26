@@ -49,23 +49,12 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
   strlcpy (fn_copy2, file_name, PGSIZE);
 
-  /*
-  int i;
-  char* fn_copy3 = palloc_get_page(0);
-  struct disk* d = disk_get(1,1);
-  for (i=0; i<8; i++)
-    disk_write(d, i, fn_copy + i*DISK_SECTOR_SIZE);
-  for (i=0; i<8; i++)
-    disk_read(d, i, fn_copy3 + i*DISK_SECTOR_SIZE);
-  printf("fn_copy3 : %s...\n", fn_copy3);
-  palloc_free_page(fn_copy3);
-  */
-
   char dummy[200];
   const char* delim = " ";
   file_name = strtok_r((char*) fn_copy2, delim, dummy);
 
   struct thread* tcurrent = thread_current();
+  tcurrent->child_success = false;
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   sema_down(&tcurrent->creation_sema);
@@ -174,24 +163,27 @@ process_exit (void)
   struct list_elem* elem_pointer = NULL;
   struct child_elem* i = NULL;
 
-  frame_lock_try_release (tcurrent);
-  swap_lock_try_release (tcurrent);
-  file_lock_try_release (tcurrent);
-
-  file_close(tcurrent->exec_file);
-
+  // 부모가 죽기전에 자식이 있다면 먼저 다 죽이거나 기다려야함
   lock_acquire(&tcurrent->finding_sema_lock);
   elem_pointer = list_begin(&tcurrent->child_list);
   while (elem_pointer != list_end(&tcurrent->child_list))
   {
     i = list_entry(elem_pointer , struct child_elem, elem);
     lock_release(&tcurrent->finding_sema_lock);
-    //printf("i : %p, child_tid : %d...\n", i, i->child_tid);
     process_wait(i->child_tid);
     lock_acquire(&tcurrent->finding_sema_lock);
     elem_pointer = list_next(elem_pointer);
   }
   lock_release(&tcurrent->finding_sema_lock);
+
+  frame_lock_try_release (tcurrent);
+  swap_lock_try_release (tcurrent);
+  file_lock_try_release (tcurrent);
+
+  // frame_table에서 이 프로세스에 해당하는 frame_elem deallocate
+  frame_table_delete (tcurrent->pagedir);
+
+  file_close(tcurrent->exec_file);
 
   // struct thread의 file_list를 deallocate
   struct file_elem* fi =NULL;
@@ -205,27 +197,6 @@ process_exit (void)
     palloc_free_page(fi);
   }
   file_lock_release();
-
-  // frame_table에서 이 프로세스에 해당하는 frame_elem deallocate
-  frame_table_delete (tcurrent->pagedir);
-
-  // sema_up 시킬 세마를 찾는다.
-  if(tcurrent->tparent->tid == tcurrent->tid) return;
-
-  lock_acquire(&tcurrent->tparent->finding_sema_lock);
-  elem_pointer = list_begin(&(tcurrent->tparent->child_list));
-  while (elem_pointer != list_end(&(tcurrent->tparent->child_list)))
-  {
-    i = list_entry(elem_pointer , struct child_elem, elem);
-    if (i->child_tid == tcurrent->tid)
-    {
-      lock_release(&tcurrent->tparent->finding_sema_lock);
-      sema_up(&i->semaphore);
-      return;
-    }
-    elem_pointer = list_next(elem_pointer);
-  }
-  lock_release(&tcurrent->tparent->finding_sema_lock);
 
   // supplementary page table이 더 늦게 삭제되어야 한다.
   supplementary_lock_acquire(tcurrent);
@@ -248,6 +219,25 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  // 부모가 wait하고 있는 세마를 찾아서 sema_up
+  if(tcurrent->tparent->tid != tcurrent->tid)
+  {
+    lock_acquire(&tcurrent->tparent->finding_sema_lock);
+    elem_pointer = list_begin(&(tcurrent->tparent->child_list));
+    while (elem_pointer != list_end(&(tcurrent->tparent->child_list)))
+    {
+      i = list_entry(elem_pointer , struct child_elem, elem);
+      if (i->child_tid == tcurrent->tid)
+      {
+        lock_release(&tcurrent->tparent->finding_sema_lock);
+        sema_up(&i->semaphore);
+        return;
+      }
+      elem_pointer = list_next(elem_pointer);
+    }
+    lock_release(&tcurrent->tparent->finding_sema_lock);
+  }
 
   return;
 }
@@ -570,7 +560,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       pi->writable = writable;
       pi->swap_outed = false;
       pi->swap_index = 0;
-      pi->is_stack = false;
       //printf("hash elem - vaddr : %p, filepos : %p, read_bytes : %x, zero_bytes : %x\n", \
           upage, ofs, page_read_bytes, page_zero_bytes);
       supplementary_lock_acquire(tcurrent);
@@ -594,21 +583,55 @@ setup_stack (void **esp, char* arg)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (/* PAL_USER | */PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
-      else
-      {
-        palloc_free_page (kpage);
-        return false;
-      }
-    }
+  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  if (kpage == NULL)
+  {
+    // stack page할당이 실패하면 swap out해야함
+    disk_sector_t i;
+    int count = 0;
+    struct disk* d = disk_get(1,1);
+    size_t swapping_index = swap_table_scan_and_flip();
+    struct frame_elem* victim_frame = frame_table_find_victim();
+    ASSERT(victim_frame != NULL);
+  
+    uint8_t* victim_kvaddr = pagedir_get_page(victim_frame->pd, victim_frame->vaddr);
+    ASSERT(is_kernel_vaddr (victim_kvaddr));
 
-  /*
+    ASSERT (page_swap_out_index (victim_frame->vaddr, victim_frame->pd_thread, true, swapping_index));
+    for (i = swapping_index*8; i<swapping_index*8+8; i++)
+    {
+      disk_write(d, i, victim_kvaddr + count*DISK_SECTOR_SIZE);
+      count++;
+    }
+    // 1. victim의 pd 가리키는 내용 등에 대해 수정
+    // 2. 추가적인 같은 alias 고려 - mmap 이후 하기로...
+
+    pagedir_clear_page(victim_frame->pd, victim_frame->vaddr);
+    palloc_free_page(victim_kvaddr);
+    free (victim_frame);
+
+    kpage = palloc_get_page (PAL_USER|PAL_ZERO);
+    swap_lock_release ();
+
+    if (kpage == NULL)
+    {
+      printf("stack page allocation failed due to memory leak...\n");
+      return false;
+    }
+  }
+
+  success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+  if (success)
+    *esp = PHYS_BASE;
+  else
+  {
+    palloc_free_page (kpage);
+    return false;
+  }
+
   struct thread* tcurrent = thread_current();
+  pagedir_set_dirty (tcurrent->pagedir, ((uint8_t *) PHYS_BASE) - PGSIZE, true);
+
   struct page* pi = malloc (sizeof(struct page));
   if (pi == NULL)
     return false;
@@ -616,14 +639,18 @@ setup_stack (void **esp, char* arg)
   pi->load_filepos = 0;
   pi->load_read_bytes = 0;
   pi->load_zero_bytes = PGSIZE;
-  pi->writable = false;
+  pi->writable = true;
   pi->swap_outed = false;
   pi->swap_index = 0;
-  pi->is_stack = true;
   supplementary_lock_acquire(tcurrent);
   hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
   supplementary_lock_release(tcurrent);
-  */
+
+  struct frame_elem *fr_elem = malloc (sizeof(struct frame_elem));
+  fr_elem->pd = tcurrent->pagedir;
+  fr_elem->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  fr_elem->pd_thread = tcurrent;
+  frame_table_push_back(fr_elem);
 
   int tmp;
   int* ebp = (int*)*esp;
@@ -704,6 +731,8 @@ setup_stack (void **esp, char* arg)
   *esp -= sizeof(void*);
   if(*esp < ebp - 0x1000)
     return false;
+
+  set_new_dirty_page (*esp, tcurrent);
 
   //hex_dump(0, *esp, 100, true);
 

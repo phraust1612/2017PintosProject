@@ -26,5 +26,6 @@ size_t frame_table_size (void);
 
 void frame_lock_try_release (struct thread* t);
 void swap_lock_try_release (struct thread* t);
+void swap_lock_release (void);
 
 #endif

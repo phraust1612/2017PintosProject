@@ -527,7 +527,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->next_fd = 2;
   t->child_success = false;
   t->exec_file = NULL;
-  t->user_esp = 0xc0000000;
+  t->user_esp = 0xc0000000 - 1;
   lock_init (&t->supplementary_page_lock);
   sema_init(&t->creation_sema,0);
   list_init(&t->file_list);

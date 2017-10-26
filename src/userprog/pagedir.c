@@ -186,6 +186,35 @@ pagedir_set_dirty (uint32_t *pd, const void *vpage, bool dirty)
     }
 }
 
+/* Returns true if the PTE for virtual page VPAGE in PD is dirty,
+   that is, if the page has been modified since the PTE was
+   installed.
+   Returns false if PD contains no PTE for VPAGE. */
+bool
+pagedir_is_stack (uint32_t *pd, const void *vpage) 
+{
+  uint32_t *pte = lookup_page (pd, vpage, false);
+  return pte != NULL && (*pte & PTE_S) != 0;
+}
+
+/* Set the dirty bit to DIRTY in the PTE for virtual page VPAGE
+   in PD. */
+void
+pagedir_set_stack (uint32_t *pd, const void *vpage, bool dirty) 
+{
+  uint32_t *pte = lookup_page (pd, vpage, false);
+  if (pte != NULL) 
+    {
+      if (dirty)
+        *pte |= PTE_S;
+      else 
+        {
+          *pte &= ~(uint32_t) PTE_S;
+          invalidate_pagedir (pd);
+        }
+    }
+}
+
 /* Returns true if the PTE for virtual page VPAGE in PD has been
    accessed recently, that is, between the time the PTE was
    installed and the last time it was cleared.  Returns false if

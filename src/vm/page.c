@@ -22,7 +22,7 @@ page_less (const struct hash_elem *a_, const struct hash_elem *b_,
 struct page *
 page_lookup (const void *address, struct thread* tcurrent)
 {
-  ASSERT (tcurrent != NULL);
+  ASSERT (tcurrent != NULL && tcurrent->magic == 0xcd6abf4b);
   supplementary_lock_acquire(tcurrent);
   struct page *p = malloc (sizeof(struct page));
   struct hash_elem *e;
@@ -38,7 +38,7 @@ page_lookup (const void *address, struct thread* tcurrent)
 bool
 page_swap_out_index (const void *address, struct thread* tcurrent, bool new_swap_outed, uint32_t new_index)
 {
-  ASSERT (tcurrent != NULL);
+  ASSERT (tcurrent != NULL && tcurrent->magic == 0xcd6abf4b);
   ASSERT (!hash_empty (&tcurrent->supplementary_page_table));
   supplementary_lock_acquire(tcurrent);
   struct page *p = malloc (sizeof(struct page));
@@ -74,36 +74,14 @@ void remove_page (struct hash_elem* target_elem, void *aux UNUSED)
   free(target);
 }
 
-int find_filepos(uint8_t* upage, struct thread* tcurrent)
+void
+set_new_dirty_page (void* new_esp, struct thread* t)
 {
-  /*
-  int i;
-  for (i=0; i<tcurrent->load_max_count; i++)
+  if (t->user_esp != new_esp && is_user_vaddr (new_esp))
   {
-    if (tcurrent->load_start_vaddr[i] <= upage &&
-        upage < tcurrent->load_start_vaddr[i] + tcurrent->load_read_bytes[i] + tcurrent->load_zero_bytes[i])
-      return upage - tcurrent->load_start_vaddr[i] + tcurrent->load_start_filepos[i];
-
-  }*/
-  return -1;
+    // 기존 esp의 stack page를 dirty bit unset
+    pagedir_set_stack (t->pagedir, pg_round_down (t->user_esp), false);
+    t->user_esp = new_esp;
+    pagedir_set_stack (t->pagedir, pg_round_down (t->user_esp), true);
+  }
 }
-
-int find_read_bytes(uint8_t* upage, struct thread* tcurrent)
-{
-  /*
-  int i;
-  uint32_t end_point;
-  for (i=0; i<tcurrent->load_max_count; i++)
-  {
-    end_point = tcurrent->load_start_vaddr[i] + tcurrent->load_read_bytes[i] + tcurrent->load_zero_bytes[i];
-    if (tcurrent->load_start_vaddr[i] <= upage &&
-        upage < end_point)
-    {
-      if (upage >= end_point - PGSIZE) return PGSIZE;
-      else return PGSIZE - tcurrent->load_zero_bytes[i];
-    }
-
-  }*/
-  return -1;
-}
-

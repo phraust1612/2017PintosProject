@@ -24,14 +24,14 @@ syscall_handler (struct intr_frame *f UNUSED)
   struct file_elem* f_elem;
   struct child_elem* t_elem;
   struct thread* tcurrent = thread_current();
-  tcurrent->user_esp = f->esp;
+  if (is_user_vaddr (f->esp))
+    set_new_dirty_page (f->esp, tcurrent);
 
   if(!check_valid_pointer(f->esp, f))
   {
     buffer = (const char*) tcurrent->name;
     printf("%s: exit(%d)\n", buffer, -1);
     thread_exit();
-    ASSERT(false);
     return;
   }
   int syscall_no = * (int*)f->esp ;

@@ -29,7 +29,6 @@ swap_table_scan_and_flip (void)
   size_t ans;
   lock_acquire (&swap_lock);
   ans = bitmap_scan_and_flip (swap_table, 0, 1, false);
-  lock_release (&swap_lock);
   return ans;
 }
 
@@ -61,7 +60,8 @@ frame_table_find_victim (void)
   totest = list_entry (elem_pointer, struct frame_elem, elem);
     //printf("totest : %p, totest->pd : %p, totest->vaddr : %p...\n",\
         totest, totest->pd, totest->vaddr);
-  while(pagedir_is_accessed (totest->pd, totest->vaddr))
+  while(pagedir_is_accessed (totest->pd, totest->vaddr) ||
+      pagedir_is_stack (totest->pd, totest->vaddr))
   {
     pagedir_set_accessed (totest->pd, totest->vaddr, false);
     list_push_back (&frame_table, elem_pointer);
@@ -111,6 +111,12 @@ frame_lock_try_release (struct thread* t)
 {
   if (frame_lock.holder == t)
     lock_release (&frame_lock);
+}
+
+void
+swap_lock_release (void)
+{
+  lock_release (&swap_lock);
 }
 
 void
