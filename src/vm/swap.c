@@ -54,12 +54,14 @@ frame_table_find_victim (void)
   struct frame_elem* totest;
   struct list_elem* elem_pointer;
   size_t next_size, prev_size = frame_table_size();
-  if (list_empty (&frame_table)) return NULL;
+  if (list_empty (&frame_table))
+  {
+    lock_release (&frame_lock);
+    return NULL;
+  }
 
   elem_pointer = list_pop_front(&frame_table);
   totest = list_entry (elem_pointer, struct frame_elem, elem);
-    //printf("totest : %p, totest->pd : %p, totest->vaddr : %p...\n",\
-        totest, totest->pd, totest->vaddr);
   while(pagedir_is_accessed (totest->pd, totest->vaddr) ||
       pagedir_is_stack (totest->pd, totest->vaddr))
   {
@@ -92,6 +94,28 @@ frame_table_delete (uint32_t pd)
     if (i->pd == pd)
     {
       elem_pointer = list_remove (elem_pointer);
+      free (i);
+    }
+    else
+      elem_pointer = list_next(elem_pointer);
+  }
+  lock_release (&frame_lock);
+}
+
+void
+frame_elem_delete (void* target_addr, uint32_t* target_pd)
+{
+  struct frame_elem* i;
+  lock_acquire (&frame_lock);
+  struct list_elem* elem_pointer = list_begin(&frame_table);
+  while (elem_pointer != list_end(&frame_table))
+  {
+    i = list_entry(elem_pointer , struct frame_elem, elem);
+    if (i->vaddr == target_addr && i->pd == target_pd)
+    {
+      elem_pointer = list_remove (elem_pointer);
+      palloc_free_page(pagedir_get_page (i->pd, i->vaddr));
+      pagedir_clear_page(i->pd, i->vaddr);
       free (i);
     }
     else

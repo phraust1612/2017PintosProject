@@ -17,6 +17,8 @@
 #include "lib/kernel/hash.h"
 #endif
 
+typedef int mapid_t;
+
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
@@ -48,6 +50,16 @@ struct file_elem
   struct list_elem elem;
   struct file* f;
   int fd;
+};
+
+struct mmap_elem
+{
+  struct list_elem elem;
+  uint32_t start_vaddr;
+  uint32_t read_bytes;
+  mapid_t mid;
+  int fd;
+  struct file* f;
 };
 
 /* Thread priorities. */
@@ -140,8 +152,10 @@ struct thread
 
     // struct file* 와 대응하는 file descriptor(int)의 리스트
     struct list file_list;
+    struct list mmap_list;
     // 다음 할당될 fd
     int next_fd;
+    int next_mid;
 
     struct file* exec_file;
     struct hash supplementary_page_table;
@@ -205,5 +219,8 @@ void file_lock_try_release (struct thread* t);
 
 void supplementary_lock_acquire(struct thread* t);
 void supplementary_lock_release(struct thread* t);
+
+void munmap_list (mapid_t target_mid);
+bool exist_mmap_elem (int fd, struct thread* tcurrent);
 
 #endif /* threads/thread.h */

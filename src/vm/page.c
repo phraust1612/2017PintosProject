@@ -26,7 +26,11 @@ page_lookup (const void *address, struct thread* tcurrent)
   supplementary_lock_acquire(tcurrent);
   struct page *p = malloc (sizeof(struct page));
   struct hash_elem *e;
-  if (p == NULL) return NULL;
+  if (p == NULL)
+  {
+    supplementary_lock_release (tcurrent);
+    return NULL;
+  }
   p->load_vaddr = pg_round_down(address);
   e = hash_find (&tcurrent->supplementary_page_table, &p->elem);
   struct page* ans = e != NULL ?  hash_entry (e, struct page, elem) : NULL;
@@ -43,7 +47,11 @@ page_swap_out_index (const void *address, struct thread* tcurrent, bool new_swap
   supplementary_lock_acquire(tcurrent);
   struct page *p = malloc (sizeof(struct page));
   struct hash_elem *e;
-  if (p == NULL) return false;
+  if (p == NULL)
+  {
+    supplementary_lock_release (tcurrent);
+    return false;
+  }
   p->load_vaddr = pg_round_down(address);
   e = hash_find (&tcurrent->supplementary_page_table, &p->elem);
   struct page* prev_p = e != NULL ?  hash_entry (e, struct page, elem) : NULL;
@@ -55,6 +63,8 @@ page_swap_out_index (const void *address, struct thread* tcurrent, bool new_swap
     p->writable = prev_p->writable;
     p->swap_outed = new_swap_outed;
     p->swap_index = new_index;
+    p->f = prev_p->f;
+    p->mmaped = prev_p->mmaped;
     hash_replace (&tcurrent->supplementary_page_table, &p->elem);
     free (prev_p);
     supplementary_lock_release(tcurrent);

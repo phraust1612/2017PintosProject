@@ -20,7 +20,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   int* arg;
   const char* buffer;
   int* size;
-  //struct page* pi;
+  struct page* pi;
+  struct mmap_elem* mi;
   struct file_elem* f_elem;
   struct child_elem* t_elem;
   struct thread* tcurrent = thread_current();
@@ -270,7 +271,8 @@ syscall_handler (struct intr_frame *f UNUSED)
         if(f_elem != NULL)
         {
           file_lock_acquire();
-          file_close((struct file*) f_elem->f);
+          if (!exist_mmap_elem (f_elem->fd, tcurrent))
+            file_close((struct file*) f_elem->f);
           list_remove(&f_elem->elem);
           palloc_free_page(f_elem);
           file_lock_release();
@@ -279,6 +281,113 @@ syscall_handler (struct intr_frame *f UNUSED)
       else
       {
         f->eax = -1;
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
+    case SYS_MMAP:
+      arg = (int*)f->esp + 1;  // fd
+      buffer = (void*)* ((int*)f->esp + 2); // addr
+      if (check_valid_pointer (arg, f) && is_user_vaddr (buffer))
+      {
+        f_elem = find_file (*arg);
+        if (f_elem != NULL)
+        {
+          file_lock_acquire ();
+          off_t mapped_size = file_length (f_elem->f);
+          file_lock_release ();
+          if (mapped_size <=0
+            || buffer == NULL
+            || pg_ofs (buffer) != 0)
+          {
+            f->eax = -1;
+            return;
+          }
+
+          unsigned count = 0;
+          int read_bytes = mapped_size;
+          while (read_bytes > 0)
+          {
+            if (page_lookup (buffer + count*PGSIZE, tcurrent))
+            {
+              f->eax = -1;
+              return;
+            }
+            read_bytes -= PGSIZE;
+            count++;
+          }
+
+          mi = malloc (sizeof (struct mmap_elem));
+          if (mi == NULL)
+          {
+            f->eax = -1;
+            printf("%s: exit(%d)\n", tcurrent->name, -1);
+            thread_exit();
+          }
+          mi->start_vaddr = buffer;
+          mi->read_bytes = mapped_size;
+          mi->fd = *arg;
+          mi->f = f_elem->f;
+          mi->mid = tcurrent->next_mid;
+          tcurrent->next_mid++;
+
+          f->eax = mi->mid;
+          list_push_back (&tcurrent->mmap_list, &mi->elem);
+
+          count = 0;
+          read_bytes = mapped_size;
+          while (read_bytes > 0)
+          {
+            pi = malloc (sizeof (struct page));
+            if (pi == NULL)
+            {
+              free (mi);
+              f->eax = -1;
+              printf("%s: exit(%d)\n", tcurrent->name, -1);
+              thread_exit();
+            }
+            pi->load_vaddr = buffer;
+            pi->load_filepos = PGSIZE * count;
+            pi->load_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+            pi->load_zero_bytes = PGSIZE - pi->load_read_bytes;
+            pi->writable = true;  // TODO: ???
+            pi->swap_outed = false;
+            pi->swap_index = 0;
+            pi->f = f_elem->f;
+            pi->mmaped = true;
+            supplementary_lock_acquire(tcurrent);
+            hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
+            supplementary_lock_release(tcurrent);
+            read_bytes -= PGSIZE;
+            count++;
+          }
+        }
+        // wrong file descriptor or not found from file list
+        else
+        {
+          f->eax = -1;
+          printf("%s: exit(%d)\n", tcurrent->name, -1);
+          thread_exit();
+        }
+      }
+      else
+      {
+        f->eax = -1;
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
+    case SYS_MUNMAP:
+      arg = (int*)f->esp + 1;  // mapid_t
+      if (check_valid_pointer (arg, f))
+      {
+        // frame_table에서 lazy load된 mmap을 dealloc
+        // supplementary에서 다 지우고
+        // tcurrent에서 mmap_list에서 없애준다.
+        munmap_list (*arg);
+      }
+      else
+      {
         printf("%s: exit(%d)\n", tcurrent->name, -1);
         thread_exit();
       }

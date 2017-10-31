@@ -185,6 +185,15 @@ process_exit (void)
 
   file_close(tcurrent->exec_file);
 
+  struct mmap_elem* mi = NULL;
+  elem_pointer = list_begin (&tcurrent->mmap_list);
+  while (elem_pointer != list_end (&tcurrent->mmap_list))
+  {
+    mi = list_entry (elem_pointer, struct mmap_elem, elem);
+    elem_pointer = list_next (elem_pointer);
+    munmap_list (mi->mid);
+  }
+
   // struct thread의 file_list를 deallocate
   struct file_elem* fi =NULL;
   file_lock_acquire();
@@ -540,8 +549,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (ofs % PGSIZE == 0);
 
   struct thread* tcurrent = thread_current();
-  //printf("load_segment - total read_bytes : %x, total zero_bytes : %x\n", \
-      read_bytes, zero_bytes);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Do calculate how to fill this page.
@@ -560,8 +567,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       pi->writable = writable;
       pi->swap_outed = false;
       pi->swap_index = 0;
-      //printf("hash elem - vaddr : %p, filepos : %p, read_bytes : %x, zero_bytes : %x\n", \
-          upage, ofs, page_read_bytes, page_zero_bytes);
+      pi->f = file;
+      pi->mmaped = false;
       supplementary_lock_acquire(tcurrent);
       hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
       supplementary_lock_release(tcurrent);
@@ -642,6 +649,8 @@ setup_stack (void **esp, char* arg)
   pi->writable = true;
   pi->swap_outed = false;
   pi->swap_index = 0;
+  pi->f = NULL;
+  pi->mmaped = false;
   supplementary_lock_acquire(tcurrent);
   hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
   supplementary_lock_release(tcurrent);

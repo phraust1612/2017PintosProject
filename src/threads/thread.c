@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "filesys/file.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -525,12 +526,14 @@ init_thread (struct thread *t, const char *name, int priority)
   if(!is_thread(t->tparent)) t->tparent = t;
   // recursively set current thread's level
   t->next_fd = 2;
+  t->next_mid = 0;
   t->child_success = false;
   t->exec_file = NULL;
   t->user_esp = 0xc0000000 - 1;
   lock_init (&t->supplementary_page_lock);
   sema_init(&t->creation_sema,0);
   list_init(&t->file_list);
+  list_init (&t->mmap_list);
   list_init(&t->child_list);
   lock_init(&t->finding_sema_lock);
   initial_thread->wakeup_tick = 0;
@@ -734,3 +737,66 @@ find_child (tid_t tid, struct thread* t)
   lock_release(&t->finding_sema_lock);
   return NULL;
 }
+
+void
+munmap_list (mapid_t target_mid)
+{
+  size_t real_read_bytes;
+  uint32_t count;
+  struct thread* tcurrent = thread_current ();
+  struct file* f;
+  struct mmap_elem* mi;
+  struct page* pp;
+  struct list_elem* elem_pointer = list_begin (&tcurrent->mmap_list);
+  while (elem_pointer != list_end (&tcurrent->mmap_list))
+  {
+    mi = list_entry (elem_pointer, struct mmap_elem, elem);
+    if (mi->mid == target_mid)
+    {
+      count = 0;
+      void* buffer = mi->start_vaddr;
+      size_t read_bytes = mi->read_bytes;
+      while (read_bytes > 0)
+      {
+        // write back to file disk
+        real_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+        if (pagedir_is_dirty (tcurrent->pagedir, buffer + count*PGSIZE))
+          inode_write_at (file_get_inode (mi->f), buffer + count*PGSIZE, real_read_bytes, count*PGSIZE);
+
+        // frame table이랑 supplementary page table에서 지우고
+        pp = page_lookup (buffer + count*PGSIZE, tcurrent);
+        frame_elem_delete (buffer + count*PGSIZE, tcurrent->pagedir);
+        supplementary_lock_acquire (tcurrent);
+        hash_delete (&tcurrent->supplementary_page_table, &pp->elem);
+        free (pp);
+        supplementary_lock_release (tcurrent);
+        read_bytes -= real_read_bytes;
+        count++;
+      }
+
+      // tcurrent->mmap_list 에서 지운다.
+      elem_pointer = list_remove (elem_pointer);
+      if (find_file (mi->fd) == NULL)
+        file_close (mi->f);
+      free (mi);
+
+      return;
+    }
+    else elem_pointer = list_next (elem_pointer);
+  }
+}
+
+bool
+exist_mmap_elem (int fd, struct thread* tcurrent)
+{
+  struct mmap_elem* mi;
+  struct list_elem* elem_pointer = list_begin (&tcurrent->mmap_list);
+  while (elem_pointer != list_end (&tcurrent->mmap_list))
+  {
+    mi = list_entry (elem_pointer, struct mmap_elem, elem);
+    if (mi->fd == fd) return true;
+    elem_pointer = list_next (elem_pointer);
+  }
+  return false;
+}
+

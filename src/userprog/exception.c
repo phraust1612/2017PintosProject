@@ -154,6 +154,7 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
+
   struct thread* tcurrent = thread_current();
   void* user_esp;
   if (is_user_vaddr (f->esp))
@@ -168,21 +169,35 @@ page_fault (struct intr_frame *f)
   if (kpage == NULL)
   {
     // swap out
-    struct disk* d = disk_get(1,1);
+    struct disk* d;
     swapping_index = swap_table_scan_and_flip();
 
     fr_elem = frame_table_find_victim();
     ASSERT(fr_elem != NULL);
-  
+    struct page* victim_page = page_lookup (fr_elem->vaddr, fr_elem->pd_thread);
+    ASSERT (victim_page != NULL)
     uint8_t* victim_kvaddr = pagedir_get_page(fr_elem->pd, fr_elem->vaddr);
-    ASSERT(victim_kvaddr);
 
-    ASSERT (page_swap_out_index (fr_elem->vaddr, fr_elem->pd_thread, true, swapping_index));
-    count = 0;
-    for (i = swapping_index*8; i<swapping_index*8+8; i++)
+    if (!victim_page->mmaped)
     {
-      disk_write(d, i, victim_kvaddr + count*DISK_SECTOR_SIZE);
-      count++;
+      d = disk_get(1,1);
+      ASSERT(victim_kvaddr);
+
+      ASSERT (page_swap_out_index (fr_elem->vaddr, fr_elem->pd_thread, true, swapping_index));
+      count = 0;
+      for (i = swapping_index*8; i<swapping_index*8+8; i++)
+      {
+        disk_write(d, i, victim_kvaddr + count*DISK_SECTOR_SIZE);
+        count++;
+      }
+    }
+    else
+    {
+      if (pagedir_is_dirty (fr_elem->pd, fr_elem->vaddr))
+      {
+        pagedir_set_dirty (fr_elem->pd, fr_elem->vaddr, false);
+        inode_write_at (file_get_inode (victim_page->f), victim_kvaddr, victim_page->load_read_bytes, victim_page->load_filepos);
+      }
     }
     // 1. victim의 pd 가리키는 내용 등에 대해 수정
     // 2. 추가적인 같은 alias 고려 - mmap 이후 하기로...
@@ -193,6 +208,7 @@ page_fault (struct intr_frame *f)
 
     kpage = palloc_get_page (PAL_USER|PAL_ZERO);
     swap_lock_release ();
+
     if (kpage == NULL) return;
   }
 
@@ -217,6 +233,8 @@ page_fault (struct intr_frame *f)
       pi->writable = true;
       pi->swap_outed = false;
       pi->swap_index = 0;
+      pi->f = NULL;
+      pi->mmaped = false;
       supplementary_lock_acquire(tcurrent);
       hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
       supplementary_lock_release(tcurrent);
@@ -245,6 +263,8 @@ page_fault (struct intr_frame *f)
       return;
     }
   }
+
+  struct file* ff = faulted_page->f;
   uint32_t filepos = faulted_page->load_filepos;
   uint32_t read_bytes = faulted_page->load_read_bytes;
   bool writable = faulted_page->writable;
@@ -260,11 +280,12 @@ page_fault (struct intr_frame *f)
     // do lazy load
     if (!swap_out)
     {
-      file_seek (tcurrent->exec_file , (uint32_t) filepos);
-      if (file_read (tcurrent->exec_file, kpage, read_bytes) != (int) read_bytes)
+      file_seek (ff, (uint32_t) filepos);
+      if (file_read (ff, kpage, read_bytes) != (int) read_bytes)
       {
         palloc_free_page (kpage);
-        printf("whatthe 1\n");
+        printf("%s: exit(%d)\n", thread_current()->name, -1);
+        thread_exit (); 
         return ; 
       }
       /* Add the page to the process's address space. */

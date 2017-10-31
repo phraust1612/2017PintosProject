@@ -12,11 +12,13 @@ struct page
 {
   struct hash_elem elem;
   uint32_t load_vaddr;  /* user virtual addr */
+  struct file* f;
   uint32_t load_filepos;
   uint32_t load_read_bytes;
   uint32_t load_zero_bytes;
   bool writable;
   bool swap_outed;  /* if true, find this from swap disk */
+  bool mmaped;
   uint32_t swap_index;
 };
 
