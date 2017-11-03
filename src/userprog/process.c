@@ -610,8 +610,6 @@ setup_stack (void **esp, char* arg)
       disk_write(d, i, victim_kvaddr + count*DISK_SECTOR_SIZE);
       count++;
     }
-    // 1. victim의 pd 가리키는 내용 등에 대해 수정
-    // 2. 추가적인 같은 alias 고려 - mmap 이후 하기로...
 
     pagedir_clear_page(victim_frame->pd, victim_frame->vaddr);
     palloc_free_page(victim_kvaddr);
@@ -742,8 +740,6 @@ setup_stack (void **esp, char* arg)
     return false;
 
   set_new_dirty_page (*esp, tcurrent);
-
-  //hex_dump(0, *esp, 100, true);
 
   return success;
 }

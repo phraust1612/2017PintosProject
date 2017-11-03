@@ -743,6 +743,7 @@ munmap_list (mapid_t target_mid)
 {
   size_t real_read_bytes;
   uint32_t count;
+  off_t prev_off;
   struct thread* tcurrent = thread_current ();
   struct file* f;
   struct mmap_elem* mi;
@@ -756,28 +757,46 @@ munmap_list (mapid_t target_mid)
       count = 0;
       void* buffer = mi->start_vaddr;
       size_t read_bytes = mi->read_bytes;
+      file_lock_acquire ();
+      prev_off = file_tell (mi->f);
+      file_lock_release ();
       while (read_bytes > 0)
       {
         // write back to file disk
         real_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         if (pagedir_is_dirty (tcurrent->pagedir, buffer + count*PGSIZE))
-          inode_write_at (file_get_inode (mi->f), buffer + count*PGSIZE, real_read_bytes, count*PGSIZE);
+        {
+          file_lock_acquire ();
+          file_seek (mi->f, count*PGSIZE);
+          ASSERT (file_write (mi->f, buffer+count*PGSIZE, real_read_bytes) == real_read_bytes);
+          file_lock_release ();
+        }
 
         // frame table이랑 supplementary page table에서 지우고
-        pp = page_lookup (buffer + count*PGSIZE, tcurrent);
         frame_elem_delete (buffer + count*PGSIZE, tcurrent->pagedir);
-        supplementary_lock_acquire (tcurrent);
-        hash_delete (&tcurrent->supplementary_page_table, &pp->elem);
-        free (pp);
-        supplementary_lock_release (tcurrent);
+        pp = page_lookup (buffer + count*PGSIZE, tcurrent);
+        if (pp != NULL)
+        {
+          supplementary_lock_acquire (tcurrent);
+          hash_delete (&tcurrent->supplementary_page_table, &pp->elem);
+          free (pp);
+          supplementary_lock_release (tcurrent);
+        }
         read_bytes -= real_read_bytes;
         count++;
       }
+      file_lock_acquire ();
+      file_seek (mi->f, prev_off);
+      file_lock_release ();
 
       // tcurrent->mmap_list 에서 지운다.
       elem_pointer = list_remove (elem_pointer);
       if (find_file (mi->fd) == NULL)
+      {
+        file_lock_acquire ();
         file_close (mi->f);
+        file_lock_release ();
+      }
       free (mi);
 
       return;

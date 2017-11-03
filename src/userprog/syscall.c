@@ -346,7 +346,7 @@ syscall_handler (struct intr_frame *f UNUSED)
               printf("%s: exit(%d)\n", tcurrent->name, -1);
               thread_exit();
             }
-            pi->load_vaddr = buffer;
+            pi->load_vaddr = buffer + count*PGSIZE;
             pi->load_filepos = PGSIZE * count;
             pi->load_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
             pi->load_zero_bytes = PGSIZE - pi->load_read_bytes;
