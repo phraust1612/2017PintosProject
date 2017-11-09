@@ -177,6 +177,7 @@ page_fault (struct intr_frame *f)
     struct page* victim_page = page_lookup (fr_elem->vaddr, fr_elem->pd_thread);
     ASSERT (victim_page != NULL)
     uint8_t* victim_kvaddr = pagedir_get_page(fr_elem->pd, fr_elem->vaddr);
+    pagedir_clear_page(fr_elem->pd, fr_elem->vaddr);
 
     if (!victim_page->mmaped)
     {
@@ -206,7 +207,6 @@ page_fault (struct intr_frame *f)
       }
     }
 
-    pagedir_clear_page(fr_elem->pd, fr_elem->vaddr);
     palloc_free_page(victim_kvaddr);
     free (fr_elem);
 
@@ -268,12 +268,14 @@ page_fault (struct intr_frame *f)
     }
   }
 
+  swap_lock_acquire ();
   struct file* ff = faulted_page->f;
   uint32_t filepos = faulted_page->load_filepos;
   uint32_t read_bytes = faulted_page->load_read_bytes;
   bool writable = faulted_page->writable;
   bool swap_out = faulted_page->swap_outed;
   uint32_t swap_index = faulted_page->swap_index;
+  swap_lock_release ();
   if(filepos < 0 || read_bytes < 0)
   {
     return;

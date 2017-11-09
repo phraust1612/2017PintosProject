@@ -137,6 +137,12 @@ frame_lock_try_release (struct thread* t)
     lock_release (&frame_lock);
 }
 
+void 
+swap_lock_acquire (void)
+{
+  lock_acquire (&swap_lock);
+}
+
 void
 swap_lock_release (void)
 {
