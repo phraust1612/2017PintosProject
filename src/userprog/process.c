@@ -63,6 +63,7 @@ process_execute (const char *file_name)
  
   if (!tcurrent->child_success)
     return -1;
+ 
   // c_elem 를 여기서 지역변수로 선언하면 struct thread* 도중의 커널 스택 영역에 할당될 수 있어
   // 스택이 지나가면서 훼손될 우려가 있다. 따라서 별도의 페이지를 할당해서 만들어줘야 한다.
   struct child_elem* c_elem;
@@ -369,10 +370,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (file_name);
 
   if (file == NULL) 
-    {
-      printf ("load: %s: open failed\n", file_name);
       goto done; 
-    }
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -383,7 +381,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
       goto done; 
     }
 
@@ -398,9 +395,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
       struct Elf32_Phdr phdr;
 
       if (file_ofs < 0 || file_ofs > file_length (file))
-      {
         goto done;
-      }
+
       file_seek (file, file_ofs);
 
       if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
@@ -444,7 +440,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              //printf("start_vaddr : %x, start_filepos : %x\n",mem_page,file_page);
+
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
               {
@@ -740,6 +736,7 @@ setup_stack (void **esp, char* arg)
     return false;
 
   set_new_dirty_page (*esp, tcurrent);
+  // hex_dump (0, *esp, 0x100, true);
 
   return success;
 }
