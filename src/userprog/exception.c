@@ -292,6 +292,7 @@ page_fault (struct intr_frame *f)
       {
         file_seek (ff, prev_off);
         palloc_free_page (kpage);
+        printf ("page fault handler throw 1...\n");
         printf("%s: exit(%d)\n", thread_current()->name, -1);
         thread_exit (); 
         return ; 

@@ -17,13 +17,18 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+  bool mode;
   int* arg;
   const char* buffer;
   int* size;
+  disk_sector_t new_sector;
+  char *ret_ptr, *next_ptr;
   struct page* pi;
   struct mmap_elem* mi;
   struct file_elem* f_elem;
   struct child_elem* t_elem;
+  struct dir *dir;
+  struct inode *inode;
   struct thread* tcurrent = thread_current();
   if (is_user_vaddr (f->esp))
     set_new_dirty_page (f->esp, tcurrent);
@@ -388,6 +393,176 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
       else
       {
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
+    case SYS_CHDIR:
+      buffer = (void*)* ((int*)f->esp + 1); // dir name
+      if (check_valid_pointer (buffer, f))
+      {
+        if (buffer[0] == '/') // absolute path
+          dir = dir_open_root ();
+        else // relative path
+          dir = dir_open (inode_open (tcurrent->current_dir));
+        if (dir == NULL)
+        {
+          file_lock_release ();
+          f->eax = false;
+          printf("%s: exit(%d)\n", tcurrent->name, -1);
+          thread_exit();
+        }
+
+        for (ret_ptr = strtok_r (buffer, "/", &next_ptr);
+            ret_ptr != NULL;
+            ret_ptr = strtok_r (NULL, "/", &next_ptr))
+        {
+          if (!dir_lookup (dir, ret_ptr, &inode))
+          {
+            /* 중간인데 못찾으면 false return */
+            f->eax = false;
+            break;
+          }
+          dir_close (dir);
+          dir = dir_open (inode);
+          if (next_ptr[0] == '\0')
+          {
+            f->eax = true;
+            tcurrent->current_dir = \
+                inode_get_inumber (dir_get_inode (dir));
+          }
+        }
+        dir_close (dir);
+      }
+      else
+      {
+        f->eax = false;
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
+    case SYS_MKDIR:
+      buffer = (void*)* ((int*)f->esp + 1); // dir name
+      if (check_valid_pointer (buffer, f))
+      {
+        if (buffer[0] == '/') // absolute path
+          dir = dir_open_root ();
+        else // relative path
+          dir = dir_open (inode_open (tcurrent->current_dir));
+        if (dir == NULL)
+        {
+          file_lock_release ();
+          f->eax = false;
+          printf("%s: exit(%d)\n", tcurrent->name, -1);
+          thread_exit();
+        }
+
+        for (ret_ptr = strtok_r (buffer, "/", &next_ptr);
+            ret_ptr != NULL;
+            ret_ptr = strtok_r (NULL, "/", &next_ptr))
+        {
+          if (next_ptr[0] != '\0')
+          {
+            if (!dir_lookup (dir, ret_ptr, &inode))
+            {
+              /* 중간인데 못찾으면 false return */
+              f->eax = false;
+              break;
+            }
+            dir_close (dir);
+            dir = dir_open (inode);
+          }
+          if (next_ptr[0] == '\0')
+          {
+            if (dir_lookup (dir, ret_ptr, &inode))
+              /* 마지막인데 이미 존재한 경우 return false */
+              f->eax = false;
+            else
+            {
+              free_map_allocate (1, &new_sector);
+              dir_create (new_sector, inode_get_inumber (inode), 16);
+              dir_add (dir, ret_ptr, new_sector);
+              f->eax = true;
+            }
+          }
+        }
+        dir_close (dir);
+      }
+      else
+      {
+        f->eax = false;
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
+    case SYS_READDIR:
+      arg = (int*)f->esp + 1;  // fd
+      buffer = (void*)* ((int*)f->esp + 2); // readdir name
+      if (check_valid_pointer (arg, f) && \
+          check_valid_pointer (buffer, f))
+      {
+        f_elem = find_file(*arg);
+        if(f_elem != NULL)
+        {
+          file_lock_acquire();
+          dir = dir_open (file_get_inode (f_elem->f));
+          if (dir == NULL)
+          {
+            file_lock_release ();
+            f->eax = false;
+            printf("%s: exit(%d)\n", tcurrent->name, -1);
+            thread_exit();
+          }
+
+          f->eax = dir_readdir (dir, buffer);
+          free (dir);
+          file_lock_release();
+        }
+        else f->eax = false;
+      }
+      else
+      {
+        f->eax = false;
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
+    case SYS_ISDIR:
+      arg = (int*)f->esp + 1;  // fd
+      if (check_valid_pointer (arg, f))
+      {
+        f_elem = find_file(*arg);
+        if(f_elem != NULL)
+        {
+          file_lock_acquire();
+          f->eax = inode_is_dir (file_get_inode (f_elem->f));
+          file_lock_release();
+        }
+        else f->eax = false;
+      }
+      else
+      {
+        f->eax = false;
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      break;
+    case SYS_INUMBER:
+      arg = (int*)f->esp + 1;  // fd
+      if (check_valid_pointer (arg, f))
+      {
+        f_elem = find_file(*arg);
+        if(f_elem != NULL)
+        {
+          file_lock_acquire();
+          f->eax = inode_get_inumber (file_get_inode (f_elem->f));
+          file_lock_release();
+        }
+        else f->eax = -1;
+      }
+      else
+      {
+        f->eax = -1;
         printf("%s: exit(%d)\n", tcurrent->name, -1);
         thread_exit();
       }

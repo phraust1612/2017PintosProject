@@ -27,7 +27,7 @@ buffer_cache_init (void)
 }
 
 struct file_cache *
-buffer_cache_lookup (disk_sector_t sec_no)
+buffer_cache_release (disk_sector_t sec_no)
 {
   uint32_t i = 0;
   struct file_cache* ans;
@@ -37,6 +37,7 @@ buffer_cache_lookup (disk_sector_t sec_no)
     if (buffer_cache[i].sector_no == sec_no && buffer_cache[i].allocated)
     {
       ans = &buffer_cache[i];
+      ans->allocated = false;
       lock_release (&buffer_cache_lock);
       return ans;
     }

@@ -16,6 +16,9 @@
 #ifndef __LIB_KERNEL_HASH_H
 #include "lib/kernel/hash.h"
 #endif
+#ifdef FILESYS
+#include "devices/disk.h"
+#endif
 
 typedef int mapid_t;
 
@@ -166,6 +169,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+#endif
+#ifdef FILESYS
+    disk_sector_t current_dir;
 #endif
 
     /* Owned by thread.c. */
