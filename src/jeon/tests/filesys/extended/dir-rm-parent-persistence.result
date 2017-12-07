@@ -1,2 +1,0 @@
-FAIL
-tests/filesys/extended/dir-rm-parent.tar: corrupt ustar header

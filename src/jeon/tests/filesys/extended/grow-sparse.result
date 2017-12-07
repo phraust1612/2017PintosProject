@@ -1,2 +1,0 @@
-FAIL
-run: 2 bytes read starting at offset 8 in "testfile" differ from expected: FAILED
