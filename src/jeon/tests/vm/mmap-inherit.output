@@ -1,0 +1,41 @@
+Copying tests/vm/mmap-inherit into /tmp/7QwEwXAIRb.dsk...
+Copying ../../tests/vm/sample.txt into /tmp/7QwEwXAIRb.dsk...
+Copying tests/vm/child-inherit into /tmp/7QwEwXAIRb.dsk...
+Writing command line to /tmp/KBFflxBBF5.dsk...
+warning: can't find squish-pty, so terminal input will fail
+bochs -q
+Kernel command line: -q -f put mmap-inherit put sample.txt put child-inherit run mmap-inherit
+Pintos booting with 4,096 kB RAM...
+368 pages available in kernel pool.
+368 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hd0:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00011"
+hd0:1: detected 4,032 sector (1 MB) disk, model "Generic 1234", serial "BXHD00012"
+hd1:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00021"
+hd1:1: detected 8,064 sector (3 MB) disk, model "Generic 1234", serial "BXHD00022"
+Formatting file system...done.
+Boot complete.
+Putting 'mmap-inherit' into the file system...
+Putting 'sample.txt' into the file system...
+Putting 'child-inherit' into the file system...
+Executing 'mmap-inherit':
+(mmap-inherit) begin
+(mmap-inherit) open "sample.txt"
+(mmap-inherit) mmap "sample.txt"
+(mmap-inherit) exec "child-inherit"
+(child-inherit) begin
+child-inherit: exit(-1)
+(mmap-inherit) checking that mmap'd file still has same data
+(mmap-inherit) end
+mmap-inherit: exit(0)
+Execution of 'mmap-inherit' complete.
+Timer: 1467 ticks
+Thread: 30 idle ticks, 1231 kernel ticks, 209 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 471 reads, 406 writes
+hd1:0: 204 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 1277 characters output
+Keyboard: 0 keys pressed
+Exception: 12 page faults
+Powering off...

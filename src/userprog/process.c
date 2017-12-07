@@ -67,7 +67,7 @@ process_execute (const char *file_name)
   // c_elem 를 여기서 지역변수로 선언하면 struct thread* 도중의 커널 스택 영역에 할당될 수 있어
   // 스택이 지나가면서 훼손될 우려가 있다. 따라서 별도의 페이지를 할당해서 만들어줘야 한다.
   struct child_elem* c_elem;
-  c_elem = palloc_get_page (PAL_ZERO);
+  c_elem = malloc (sizeof (struct child_elem));
 
   c_elem->child_tid = tid;
   c_elem->exit_status = -1;
@@ -76,7 +76,7 @@ process_execute (const char *file_name)
 
   if (tid == TID_ERROR)
   {
-    palloc_free_page (c_elem);
+    free (c_elem);
   }
   return tid;
 }
@@ -143,7 +143,7 @@ process_wait (tid_t child_tid UNUSED)
       ans = i->exit_status;
       lock_acquire(&tcurrent->finding_sema_lock);
       list_remove(&i->elem);
-      palloc_free_page(i);
+      free (i);
       lock_release(&tcurrent->finding_sema_lock);
       return ans;
     }
@@ -204,7 +204,7 @@ process_exit (void)
     fi = list_entry(elem_pointer , struct file_elem, elem);
     file_close(fi->f);
     elem_pointer = list_next(elem_pointer);
-    palloc_free_page(fi);
+    free (fi);
   }
   file_lock_release();
 
@@ -464,8 +464,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
-  file_deny_write(file);
-  t->exec_file = file;
+  t->exec_file = file_reopen (file);
+  file_deny_write(t->exec_file);
 
  done:
   /* We arrive here whether the load is successful or not. */

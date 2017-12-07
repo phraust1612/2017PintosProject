@@ -537,6 +537,9 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->child_list);
   lock_init(&t->finding_sema_lock);
   initial_thread->wakeup_tick = 0;
+#ifdef FILESYS
+  t->current_dir = 1;
+#endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -785,18 +788,18 @@ munmap_list (mapid_t target_mid)
         read_bytes -= real_read_bytes;
         count++;
       }
-      file_lock_acquire ();
-      file_seek (mi->f, prev_off);
-      file_lock_release ();
+//      file_lock_acquire ();
+//      file_seek (mi->f, prev_off);
+//      file_lock_release ();
 
       // tcurrent->mmap_list 에서 지운다.
       elem_pointer = list_remove (elem_pointer);
-      if (find_file (mi->fd) == NULL)
-      {
+//      if (find_file (mi->fd) == NULL)
+//      {
         file_lock_acquire ();
         file_close (mi->f);
         file_lock_release ();
-      }
+//      }
       free (mi);
 
       return;

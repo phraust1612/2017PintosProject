@@ -1,0 +1,2 @@
+FAIL
+tests/filesys/extended/dir-over-file.tar: corrupt ustar header

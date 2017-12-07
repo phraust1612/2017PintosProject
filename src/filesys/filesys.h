@@ -8,6 +8,10 @@
 #define FREE_MAP_SECTOR 0       /* Free map file inode sector. */
 #define ROOT_DIR_SECTOR 1       /* Root directory file inode sector. */
 
+#ifndef THREADS_THREAD_H
+#include "threads/thread.h"
+#endif
+
 /* Disk used for file system. */
 extern struct disk *filesys_disk;
 

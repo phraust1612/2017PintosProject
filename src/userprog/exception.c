@@ -87,9 +87,11 @@ kill (struct intr_frame *f)
     case SEL_KCSEG:
       /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
-      // printf ("%s: dying due to interrupt %#04x (%s).\n", \
+#ifdef INODE_PRINT
+      printf ("%s: dying due to interrupt %#04x (%s).\n", \
               thread_name (), f->vec_no, intr_name (f->vec_no));
-      // intr_dump_frame (f);
+      intr_dump_frame (f);
+#endif
       printf("%s: exit(%d)\n", thread_current()->name, -1);
       thread_exit (); 
 
@@ -260,9 +262,11 @@ page_fault (struct intr_frame *f)
     }
     else
     {
-      // printf ("not found from supplementary page table, \
+#ifdef INODE_PRINT
+      printf ("not found from supplementary page table, \
         \norigin : %p, upage : %p, tcurrent_tid : %d, user_esp : %p...\n", \
         fault_addr, upage, tcurrent->tid, tcurrent->user_esp);
+#endif
       kill(f);
       return;
     }
@@ -292,7 +296,6 @@ page_fault (struct intr_frame *f)
       {
         file_seek (ff, prev_off);
         palloc_free_page (kpage);
-        printf ("page fault handler throw 1...\n");
         printf("%s: exit(%d)\n", thread_current()->name, -1);
         thread_exit (); 
         return ; 
@@ -345,13 +348,13 @@ page_fault (struct intr_frame *f)
   }
   else
   {
-    /*
+#ifdef INODE_PRINT
     printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
-          */
+#endif
     kill (f);
   }
 }

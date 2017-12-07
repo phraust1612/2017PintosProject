@@ -1,0 +1,36 @@
+Copying tests/filesys/extended/dir-rmdir into /tmp/wLpXIFv6dp.dsk...
+Copying tests/filesys/extended/tar into /tmp/wLpXIFv6dp.dsk...
+Writing command line to /tmp/kcUifEkyEl.dsk...
+warning: can't find squish-pty, so terminal input will fail
+bochs -q
+Kernel command line: -q -f put dir-rmdir put tar run dir-rmdir
+Pintos booting with 4,096 kB RAM...
+368 pages available in kernel pool.
+368 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hd0:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00011"
+hd0:1: detected 4,032 sector (1 MB) disk, model "Generic 1234", serial "BXHD00012"
+hd1:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00021"
+hd1:1: detected 8,064 sector (3 MB) disk, model "Generic 1234", serial "BXHD00022"
+Formatting file system...done.
+Boot complete.
+Putting 'dir-rmdir' into the file system...
+Putting 'tar' into the file system...
+Executing 'dir-rmdir':
+(dir-rmdir) begin
+(dir-rmdir) mkdir "a"
+(dir-rmdir) rmdir "a"
+(dir-rmdir) chdir "a" (must return false)
+(dir-rmdir) end
+dir-rmdir: exit(0)
+Execution of 'dir-rmdir' complete.
+Timer: 1406 ticks
+Thread: 30 idle ticks, 1216 kernel ticks, 163 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 465 reads, 400 writes
+hd1:0: 212 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 1050 characters output
+Keyboard: 0 keys pressed
+Exception: 5 page faults
+Powering off...

@@ -1,0 +1,30 @@
+Copying tests/userprog/sc-bad-arg into /tmp/GUJCnmRuDZ.dsk...
+Writing command line to /tmp/gxHwwY6rZi.dsk...
+warning: can't find squish-pty, so terminal input will fail
+bochs -q
+Kernel command line: -q -f put sc-bad-arg run sc-bad-arg
+Pintos booting with 4,096 kB RAM...
+368 pages available in kernel pool.
+368 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hd0:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00011"
+hd0:1: detected 4,032 sector (1 MB) disk, model "Generic 1234", serial "BXHD00012"
+hd1:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00021"
+hd1:1: detected 8,064 sector (3 MB) disk, model "Generic 1234", serial "BXHD00022"
+Formatting file system...done.
+Boot complete.
+Putting 'sc-bad-arg' into the file system...
+Executing 'sc-bad-arg':
+(sc-bad-arg) begin
+sc-bad-arg: exit(-1)
+Execution of 'sc-bad-arg' complete.
+Timer: 707 ticks
+Thread: 30 idle ticks, 607 kernel ticks, 73 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 227 reads, 162 writes
+hd1:0: 98 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 906 characters output
+Keyboard: 0 keys pressed
+Exception: 5 page faults
+Powering off...

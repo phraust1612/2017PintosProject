@@ -1,0 +1,44 @@
+Copying tests/filesys/extended/grow-sparse into /tmp/kAdm2ztJLw.dsk...
+Copying tests/filesys/extended/tar into /tmp/kAdm2ztJLw.dsk...
+Writing command line to /tmp/JVN8A2PeWF.dsk...
+warning: can't find squish-pty, so terminal input will fail
+bochs -q
+Kernel command line: -q -f put grow-sparse put tar run grow-sparse
+Pintos booting with 4,096 kB RAM...
+368 pages available in kernel pool.
+368 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hd0:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00011"
+hd0:1: detected 4,032 sector (1 MB) disk, model "Generic 1234", serial "BXHD00012"
+hd1:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00021"
+hd1:1: detected 8,064 sector (3 MB) disk, model "Generic 1234", serial "BXHD00022"
+Formatting file system...done.
+Boot complete.
+Putting 'grow-sparse' into the file system...
+Putting 'tar' into the file system...
+Executing 'grow-sparse':
+(grow-sparse) begin
+(grow-sparse) create "testfile"
+(grow-sparse) open "testfile"
+(grow-sparse) seek "testfile"
+(grow-sparse) write "testfile"
+(grow-sparse) close "testfile"
+(grow-sparse) open "testfile" for verification
+(grow-sparse) 2 bytes read starting at offset 8 in "testfile" differ from expected.
+(grow-sparse) Data actually read:
+00000000                          f8 01                   |        ..      |
+(grow-sparse) Expected data:
+00000000                          00 00                   |        ..      |
+(grow-sparse) 2 bytes read starting at offset 8 in "testfile" differ from expected: FAILED
+grow-sparse: exit(1)
+Execution of 'grow-sparse' complete.
+Timer: 2120 ticks
+Thread: 30 idle ticks, 1222 kernel ticks, 871 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 625 reads, 560 writes
+hd1:0: 213 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 1555 characters output
+Keyboard: 0 keys pressed
+Exception: 5 page faults
+Powering off...

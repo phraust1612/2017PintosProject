@@ -84,11 +84,11 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (disk_sector_t sector, off_t length)
+inode_create (disk_sector_t sector, off_t length, uint32_t info)
 {
 #ifdef EXTENSE_DEBUG
   size_t sectors = bytes_to_sectors (length);
-  return jeonduhwan (sectors, sector, length, 0);
+  return jeonduhwan (sectors, sector, length, 0, info);
 #else
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -175,10 +175,10 @@ inode_get_inumber (const struct inode *inode)
   return inode->sector;
 }
 
-bool
-inode_is_dir (struct inode *inode)
+uint32_t
+inode_get_info (struct inode *inode)
 {
-  return inode->data.info == 1;
+  return inode->data.info;
 }
 
 /* Closes INODE and writes it to disk.
@@ -250,6 +250,12 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
         DISK_SECTOR_SIZE, 0);
 #endif
   int sector_ofs = offset % DISK_SECTOR_SIZE;
+#ifdef INODE_PRINT
+  printf("inode_read_at - before loop inode->data.sector : %d, "\
+      "direct_idx : %d, direct[0] : %d, direct[1] : %d\n", \
+      inode->data.sector, direct_idx,\
+      refer_inode_disk.direct[0], refer_inode_disk.direct[1]);
+#endif
 
   while (size > 0) 
     {
@@ -258,12 +264,6 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       disk_sector_t sector_idx = byte_to_sector (inode, offset);
 #else
       disk_sector_t sector_idx = refer_inode_disk.direct [direct_idx];
-#ifdef INODE_PRINT
-      printf ("inode_read_at - direct_idx : %d, sector_idx : %d, "\
-          "indirect : %d, inode_disk sector : %d...\n",\
-          direct_idx, sector_idx, refer_inode_disk.indirect,\
-          refer_inode_disk->sector);
-#endif
 #endif
       if ((int) sector_idx < 0) break;
 
@@ -278,6 +278,9 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       if (read_bytes <= 0)
         break;
 
+#ifdef INODE_PRINT
+      printf("inode_read_at = sector idx : %d\n", sector_idx);
+#endif
       buffer_cache_read (sector_idx, buffer + bytes_read, read_bytes, sector_ofs);
       sector_ofs = 0;
 
@@ -294,13 +297,6 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
             &refer_inode_disk, DISK_SECTOR_SIZE, 0);
         direct_idx = 0;
         // hex_dump(0, refer_inode_disk, 512, true);
-#ifdef INODE_PRINT
-      printf ("inode_read_at - direct_idx : %d, sector_idx : %d, "\
-          "indirect : %d, inode_disk sector : %d...\n",\
-          direct_idx, refer_inode_disk.direct[direct_idx], \
-          refer_inode_disk.indirect,\
-          refer_inode_disk->sector);
-#endif
       }
 #endif
     }
@@ -320,29 +316,69 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
 #ifdef EXTENSE_DEBUG
-  uint32_t mok;
+  uint32_t mok, info;
+  info = inode_get_info (inode);
   struct inode_disk refer_inode_disk;
   memcpy (&refer_inode_disk, &inode->data, sizeof (struct inode_disk));
-  if (offset >= inode->data.length && size > 0 && \
-      inode->data.length != 0)
+#ifdef INODE_PRINT
+  printf ("inode_write_at - offset : %d, length : %d\n",\
+      offset, inode->data.length);
+#endif
+  if (offset >= inode->data.length && size > 0)
   {
-    for (mok = inode->data.length / (DISK_SECTOR_SIZE * DIRECT_NO);
-        mok >1; mok--)
-      buffer_cache_read (refer_inode_disk.indirect, &refer_inode_disk,\
-        DISK_SECTOR_SIZE, 0);
-    disk_sector_t final_sector_no = refer_inode_disk.indirect;
-    int add_direct_idx = inode->data.length /\
-                         DISK_SECTOR_SIZE * DIRECT_NO;
-    if (add_direct_idx == 0)
-      free_map_allocate (1, &final_sector_no);
+    /* finding refer_previous and start_direct_idx */
+    int start_direct_idx = DIV_ROUND_UP (inode->data.length, DISK_SECTOR_SIZE);
+    disk_sector_t refer_previous_sec_no = inode->data.sector;
+#ifdef INODE_PRINT
+    printf ("inode_write_at - start_direct_idx : %d, "\
+        "refer_previous_sec_no : %d\n",\
+        start_direct_idx, refer_previous_sec_no);
+#endif
+    while (start_direct_idx >= DIRECT_NO)
+    {
+      start_direct_idx -= DIRECT_NO;
+      if (refer_inode_disk.indirect)
+      {
+        refer_previous_sec_no = refer_inode_disk.indirect;
+        buffer_cache_read (refer_inode_disk.indirect, \
+            &refer_inode_disk, DISK_SECTOR_SIZE, 0);
+      }
+#ifdef INODE_PRINT
+    printf ("inode_write_at - start_direct_idx : %d, "\
+        "refer_previous_sec_no : %d, "\
+        "refer_previous->direct[0] : %d\n",\
+        start_direct_idx, refer_previous_sec_no,\
+        refer_inode_disk.direct[0]);
+#endif
+    }
 
-    uint32_t add_sector_no = bytes_to_sectors (offset + size) - \
+    /* 처음 쓰는 거면 새로 refer_previous의 indirect 는 아직
+     * 할당이 안된 상태므로 해준다 */
+    if (start_direct_idx == 0 && inode->data.length > 0)
+    {
+      free_map_allocate (1, &refer_previous_sec_no);
+      refer_inode_disk.indirect = refer_previous_sec_no;
+      buffer_cache_write (refer_inode_disk.sector,\
+          &refer_inode_disk, DISK_SECTOR_SIZE, 0);
+    }
+
+    /* 총 필요한 direct 갯수 */
+    uint32_t add_sector = bytes_to_sectors (offset + size) - \
       bytes_to_sectors (inode->data.length);
 
+#ifdef INODE_PRINT
+    printf ("inode_write_at - add_sector : %d\n",\
+        add_sector);
+#endif
+    if (add_sector > 0)
+      jeonduhwan (add_sector, refer_previous_sec_no, \
+        offset + size, start_direct_idx, info);
+
+    buffer_cache_read(inode->data.sector, &inode->data, DISK_SECTOR_SIZE, 0);
     inode->data.length = offset + size;
-    jeonduhwan (add_sector_no, final_sector_no, \
-        offset + size, add_direct_idx);
+    buffer_cache_write(inode->data.sector, &inode->data, DISK_SECTOR_SIZE, 0);
   }
+  memcpy (&refer_inode_disk, &inode->data, sizeof (struct inode_disk));
   uint32_t direct_idx = offset / DISK_SECTOR_SIZE % DIRECT_NO;
   for (mok = offset / (DISK_SECTOR_SIZE * DIRECT_NO);
         mok > 0;
@@ -362,12 +398,6 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       disk_sector_t sector_idx = byte_to_sector (inode, offset);
 #else
       disk_sector_t sector_idx = refer_inode_disk.direct [direct_idx];
-#ifdef INODE_PRINT
-      printf ("inode_write_at - direct_idx : %d, sector_idx : %d, "\
-          "indirect : %d, inode_disk sector : %d...\n",\
-          direct_idx, sector_idx, refer_inode_disk.indirect,\
-          refer_inode_disk->sector);
-#endif
 #endif
       if ((int) sector_idx < 0) break;
 
@@ -431,15 +461,16 @@ inode_length (const struct inode *inode)
   return inode->data.length;
 }
 
+int
+inode_open_cnt (struct inode *inode)
+{
+  return inode->open_cnt;
+}
 
 #ifdef EXTENSE_DEBUG
 bool
-jeonduhwan (uint32_t sectors, disk_sector_t inode_sector, off_t length, int add_direct_idx)
+jeonduhwan (uint32_t sectors, disk_sector_t inode_sector, off_t length, int start_direct_idx, uint32_t info)
 {
-#ifdef INODE_PRINT
-  printf ("jeonduhwan - no : %d, inode_disk sector : %d, "\
-      "start : %d\n", sectors, inode_sector, add_direct_idx);
-#endif
   struct inode_disk *disk_inode = NULL;
 
   /* If this assertion fails, the inode structure is not exactly
@@ -448,34 +479,44 @@ jeonduhwan (uint32_t sectors, disk_sector_t inode_sector, off_t length, int add_
 
   disk_inode = calloc (1, sizeof *disk_inode);
   if (disk_inode == NULL) return false;
+  buffer_cache_read (inode_sector, disk_inode, DISK_SECTOR_SIZE, 0);
 
   disk_inode->length = length;
   disk_inode->sector = inode_sector;
-  disk_inode->info = 0;
+  disk_inode->info = info;
   disk_inode->magic = INODE_MAGIC;
-  int direct_alloc_num = sectors > DIRECT_NO ? DIRECT_NO : sectors;
+  int direct_alloc_num = sectors + start_direct_idx > DIRECT_NO ? DIRECT_NO : start_direct_idx + sectors;
   int i;
-  for (i = add_direct_idx; i < direct_alloc_num; i++)
+  for (i = start_direct_idx; i < direct_alloc_num; i++)
   {
     free_map_allocate (1, &disk_inode->direct[i]);
+#ifdef INODE_PRINT
+    printf("jeonduhwan - allocate direct index : %d, i : %d, "\
+        "direct[0] : %d, inode_sector : %d\n", \
+        disk_inode->direct[i], i, disk_inode->direct[0], \
+        inode_sector);
+#endif
     buffer_cache_write (disk_inode->direct[i], zeros, DISK_SECTOR_SIZE, 0);
   }
 
-  if (sectors - direct_alloc_num > 0)
+  if (sectors - i + start_direct_idx > 0)
   {
     disk_sector_t new_indirect_sector;
     free_map_allocate (1, &new_indirect_sector);
     disk_inode->indirect = new_indirect_sector;
     buffer_cache_write (inode_sector, disk_inode, DISK_SECTOR_SIZE, 0);
     free (disk_inode);
-    return jeonduhwan (sectors - direct_alloc_num, new_indirect_sector, length, 0);
+#ifdef INODE_PRINT
+    printf("jeonduhwan - allocate indirect index : %d, i : %d, "\
+        "direct[0] : %d, inode_sector : %d\n", \
+        new_indirect_sector, i, disk_inode->direct[0], \
+        inode_sector);
+#endif
+    return jeonduhwan (sectors - i + start_direct_idx, \
+        new_indirect_sector, length, 0, info);
   }
   else
   {
-#ifdef INODE_PRINT
-    printf ("jeonduhwan - direct[0] : %d, direct[1] : %d\n",\
-        disk_inode->direct[0], disk_inode->direct[1]);
-#endif
     buffer_cache_write (inode_sector, disk_inode, DISK_SECTOR_SIZE, 0);
     free (disk_inode);
   }
@@ -486,10 +527,6 @@ jeonduhwan (uint32_t sectors, disk_sector_t inode_sector, off_t length, int add_
 void
 release_inode_disk (uint32_t sectors, disk_sector_t inode_sector)
 {
-#ifdef INODE_PRINT
-  printf ("release_inode_disk - no : %d, inode_disk sec : %d\n",\
-      sectors, inode_sector);
-#endif
   struct inode_disk *disk_inode = NULL;
 
   /* If this assertion fails, the inode structure is not exactly
@@ -504,9 +541,6 @@ release_inode_disk (uint32_t sectors, disk_sector_t inode_sector)
 
   if (sectors - direct_alloc_num > 0)
   {
-#ifdef INODE_PRINT
-    printf ("recursively call...\n");
-#endif
     release_inode_disk (sectors - direct_alloc_num, disk_inode->indirect);
     free_map_release (disk_inode->indirect, 1);
     buffer_cache_release (disk_inode->indirect);
@@ -514,10 +548,6 @@ release_inode_disk (uint32_t sectors, disk_sector_t inode_sector)
 
   for (i = 0; i < direct_alloc_num; i++)
   {
-#ifdef INODE_PRINT
-    printf ("release direct i : %d, inode_disk sec : %d\n",\
-        i, inode_sector);
-#endif
     free_map_release (disk_inode->direct[i], 1);
     buffer_cache_release (disk_inode->direct[i]);
   }

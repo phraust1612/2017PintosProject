@@ -1,0 +1,83 @@
+Copying tests/filesys/extended/grow-root-lg into /tmp/fdMti5VeY9.dsk...
+Copying tests/filesys/extended/tar into /tmp/fdMti5VeY9.dsk...
+Writing command line to /tmp/DN5VbrmixB.dsk...
+warning: can't find squish-pty, so terminal input will fail
+bochs -q
+Kernel command line: -q -f put grow-root-lg put tar run grow-root-lg
+Pintos booting with 4,096 kB RAM...
+368 pages available in kernel pool.
+368 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hd0:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00011"
+hd0:1: detected 4,032 sector (1 MB) disk, model "Generic 1234", serial "BXHD00012"
+hd1:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00021"
+hd1:1: detected 8,064 sector (3 MB) disk, model "Generic 1234", serial "BXHD00022"
+Formatting file system...done.
+Boot complete.
+Putting 'grow-root-lg' into the file system...
+Putting 'tar' into the file system...
+Executing 'grow-root-lg':
+(grow-root-lg) begin
+(grow-root-lg) creating and checking "file0"
+(grow-root-lg) creating and checking "file1"
+(grow-root-lg) creating and checking "file2"
+(grow-root-lg) creating and checking "file3"
+(grow-root-lg) creating and checking "file4"
+(grow-root-lg) creating and checking "file5"
+(grow-root-lg) creating and checking "file6"
+(grow-root-lg) creating and checking "file7"
+(grow-root-lg) creating and checking "file8"
+(grow-root-lg) creating and checking "file9"
+(grow-root-lg) creating and checking "file10"
+(grow-root-lg) creating and checking "file11"
+(grow-root-lg) creating and checking "file12"
+(grow-root-lg) creating and checking "file13"
+(grow-root-lg) creating and checking "file14"
+(grow-root-lg) creating and checking "file15"
+(grow-root-lg) creating and checking "file16"
+(grow-root-lg) creating and checking "file17"
+(grow-root-lg) creating and checking "file18"
+(grow-root-lg) creating and checking "file19"
+(grow-root-lg) creating and checking "file20"
+(grow-root-lg) creating and checking "file21"
+(grow-root-lg) creating and checking "file22"
+(grow-root-lg) creating and checking "file23"
+(grow-root-lg) creating and checking "file24"
+(grow-root-lg) creating and checking "file25"
+(grow-root-lg) creating and checking "file26"
+(grow-root-lg) creating and checking "file27"
+(grow-root-lg) creating and checking "file28"
+(grow-root-lg) creating and checking "file29"
+(grow-root-lg) creating and checking "file30"
+(grow-root-lg) creating and checking "file31"
+(grow-root-lg) creating and checking "file32"
+(grow-root-lg) creating and checking "file33"
+(grow-root-lg) creating and checking "file34"
+(grow-root-lg) creating and checking "file35"
+(grow-root-lg) creating and checking "file36"
+(grow-root-lg) creating and checking "file37"
+(grow-root-lg) creating and checking "file38"
+(grow-root-lg) creating and checking "file39"
+(grow-root-lg) creating and checking "file40"
+(grow-root-lg) creating and checking "file41"
+(grow-root-lg) creating and checking "file42"
+(grow-root-lg) creating and checking "file43"
+(grow-root-lg) creating and checking "file44"
+(grow-root-lg) creating and checking "file45"
+(grow-root-lg) creating and checking "file46"
+(grow-root-lg) creating and checking "file47"
+(grow-root-lg) creating and checking "file48"
+(grow-root-lg) creating and checking "file49"
+(grow-root-lg) end
+grow-root-lg: exit(0)
+Execution of 'grow-root-lg' complete.
+Timer: 6313 ticks
+Thread: 30 idle ticks, 1223 kernel ticks, 5063 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 572 reads, 507 writes
+hd1:0: 213 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 3279 characters output
+Keyboard: 0 keys pressed
+Exception: 5 page faults
+Powering off...

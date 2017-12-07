@@ -1,0 +1,96 @@
+Copying tests/filesys/extended/syn-rw into /tmp/x2vc14DSYL.dsk...
+Copying tests/filesys/extended/tar into /tmp/x2vc14DSYL.dsk...
+Copying tests/filesys/extended/child-syn-rw into /tmp/x2vc14DSYL.dsk...
+Writing command line to /tmp/VWZg0uDdeu.dsk...
+warning: can't find squish-pty, so terminal input will fail
+bochs -q
+Kernel command line: -q -f put syn-rw put tar put child-syn-rw run syn-rw
+Pintos booting with 4,096 kB RAM...
+368 pages available in kernel pool.
+368 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hd0:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00011"
+hd0:1: detected 4,032 sector (1 MB) disk, model "Generic 1234", serial "BXHD00012"
+hd1:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00021"
+hd1:1: detected 8,064 sector (3 MB) disk, model "Generic 1234", serial "BXHD00022"
+Formatting file system...done.
+Boot complete.
+Putting 'syn-rw' into the file system...
+Putting 'tar' into the file system...
+Putting 'child-syn-rw' into the file system...
+Executing 'syn-rw':
+(syn-rw) begin
+(syn-rw) create "logfile"
+(syn-rw) open "logfile"
+(syn-rw) exec child 1 of 4: "child-syn-rw 0"
+(syn-rw) exec child 2 of 4: "child-syn-rw 1"
+(syn-rw) exec child 3 of 4: "child-syn-rw 2"
+(syn-rw) exec child 4 of 4: "child-syn-rw 3"
+(child-syn-rw) 62 bytes read starting at offset 16 in "logfile" differ from expected.
+(child-syn-rw) Data actually read:
+00000010  00 00 (child-syn-rw) 62 bytes read starting at offset 16 in "logfile" differ from expected.
+00 (child-syn-rw) Data actually read:
+00 00000010  00 00 00 00 00 00 00-00 00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00 |00 .00 .00 .00 .|........(child-syn-rw) 54 bytes read starting at offset 24 in "logfile" differ from expected.
+.(child-syn-rw) Data actually read:
+.00000010  ..   ..   ..   ..   ..   ..   (child-syn-rw) 46 bytes read starting at offset 32 in "logfile" differ from expected.
+.(child-syn-rw) Data actually read:
+   00000020  .   |00 .00 
+00 .00 00000020  00 .00 00 00 .00 00 00 |00 00 00 
+00 00 00 00000020  00 00 00-00 00 00 00 00 |00 00 00  00-00 00  00 00 00  00 00 00  00 00 00  00 00 00- 00 00 00  00 |00  00 .00 .00 .00 .|.00 ...00 ...00 ...00 ...|........|...
+...00000020  ...00 ...00 ...00 ...00 ...00 .|.00 .
+.00 .00000030  .00-|00 .00 
+00 .00 00000030  00 .00 00 00 .00 00 00 |00 00 00 
+00 00 00 00000030  00 00 00-00 00 00 00 00 |00 00 00 .00-00 00 .00 00 00 .00 00 00 .00 00 00 .00 00 00-.00 00 00 .00 |00 .00 .00 .00 .00 .|.00 ...00 ...00 ...00 ...|........|...
+...00000030  ...00 ...00 ...00 ...00 ...00 .|.00 .
+.00 .00000040  .00-|00 .00 
+00 .00 00000040  00 .00 00 00 .00 00 00 |00 00 00 
+00 00 00 00000040  00 00 00-00 00 00 00 00 |00 00 00 .00-00 00 .00 00 00 .00 00 00 .00 00 00 .00    00-.00    00 .00 |00 .   .00 .   .00 .|.00 ...00 ...   ...   ...|........|...
+...00000040  ...00 ...00 ...00 . .00 . .00 .|.00  
+.00  (child-syn-rw) Expected data:
+.00000020  00-.|a8 00 .
+cc 00  (child-syn-rw) Expected data:
+75 00000010  00 07  c7 00 6d |1a 00 9f 
+7f 00 b9 (child-syn-rw) Expected data:
+a3 00000010     f0 c5-c7    cc 41 1a |eb 7a 7f .97-a5 a3 .45 cb f0 .2b 30 cc .4d fc eb .32 22 97-.27 19 45 .96 |2b .5f .4d .9e .32 .|u27 ...96 ..m5f ...9e ...| ... .A.|.z.
+...(child-syn-rw) Expected data:
+E00000010  .+.   0M.   .2.   "'.   ..E   |_+   
+.M   00000030  |2   8b 
+'45 34 00000020  .2b 98 a8 _4d 2d cc .32 bb 75 |27 62 07 
+96 9e 6d 00000020  5f c0-9f a8 9e 4b b9 cc |4f c5-75  8b 41 07  05 7a 6d  a0 a5 9f  71 cb b9  08 30 c5- 50 fc 41  |22 7a  .19 a5 E4|cb +..30 M-.fc 2.u22 'b.19 ..m|_....K..|O.u
+.A.00000020  .zma8 ...cc q..75 .0.07 P.A6d |"z9f 
+..b9 00000040  |.c5-92 
+041 a0 00000030  .7a c3 8b "a5 58 34 .cb 4a 98 |30 48 2d 
+fc e4 bb 00000030  22 a3-62 8b 19 0a 9e 34 |39 c0-98 .7b 4b 2d .8a 4f bb ucd 8b 62 .1d 05 9e m   a0 c0-.   71 4b .|08 4f ..50 8b A.|05 z..a0 .X471 .J.08 0H-50 ...|".b....4|9..
+{K-00000030  .O.8b ..b34 ...98  ..2d  qKbb |.O62 
+P.9e (child-syn-rw) 46 bytes read starting at offset 32 in "logfile" differ from expected: FAILED
+|.
+child-syn-rw: exit(1)
+c0-.4b 00000040  q4f 92 .8b a0 P05 c3 |a0 58 
+71 4a 00000040  08 48 92 50 e4 a0 |a3-c3 .0a 58 439 4a .7b 48 -8a e4 .cd a3-b1d 0a .   39 .   7b K|8a O.cd ..1d ..   .X   qJ|.H.P..|..
+.X00000040  9J92 {Ha0 ..c3 ..58 ..4a  948  {e4 |.a3-
+.0a (child-syn-rw) 62 bytes read starting at offset 16 in "logfile" differ from expected: FAILED
+.39  child-syn-rw: exit(1)
+7b  8a |cd 
+1d (child-syn-rw) 62 bytes read starting at offset 16 in "logfile" differ from expected: FAILED
+      child-syn-rw: exit(1)
+|...XJH...9{...  |
+(child-syn-rw) 54 bytes read starting at offset 24 in "logfile" differ from expected: FAILED
+child-syn-rw: exit(1)
+(syn-rw) wait for child 1 of 4 returned 1 (expected 0)
+(syn-rw) wait for child 1 of 4 returned 1 (expected 0): FAILED
+syn-rw: exit(1)
+Kernel PANIC at ../../lib/kernel/list.c:84 in list_next(): assertion `is_head (elem) || is_interior (elem)' failed.
+Call stack: 0xc01078fc 0xc0107d34 0xc0109956 0xc01011d2 0xc010bbfc 0xc0101ced 0xc0101e1f 0x804a47b 0x8048361 0x804874d 0x80481e1 0x8048984 0x80489b8.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 4411 ticks
+Thread: 30 idle ticks, 2012 kernel ticks, 2369 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 745 reads, 676 writes
+hd1:0: 327 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 5102 characters output
+Keyboard: 0 keys pressed
+Exception: 34 page faults
+Powering off...

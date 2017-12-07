@@ -1,0 +1,30 @@
+Writing command line to /tmp/mbSMUnYpSJ.dsk...
+warning: can't find squish-pty, so terminal input will fail
+bochs -q
+Kernel command line: -q run 'tar fs.tar /' get fs.tar
+Pintos booting with 4,096 kB RAM...
+368 pages available in kernel pool.
+368 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hd0:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00011"
+hd0:1: detected 4,032 sector (1 MB) disk, model "Generic 1234", serial "BXHD00012"
+hd1:0: detected 3,024 sector (1 MB) disk, model "Generic 1234", serial "BXHD00021"
+hd1:1: detected 8,064 sector (3 MB) disk, model "Generic 1234", serial "BXHD00022"
+Boot complete.
+Executing 'tar fs.tar /':
+Kernel PANIC at ../../devices/disk.c:436 in select_sector(): assertion `sec_no < d->capacity' failed.
+Call stack: 0xc01078fc 0xc0104bfa 0xc0104f80 0xc010f2fb 0xc010e105 0xc010e800 0xc010d85a 0xc010c02d 0xc0101ced 0xc0101e1f 0x804a87a 0x80480c1 0x8048496 0x804854a 0x804869a 0x8048e84.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 1703 ticks
+Thread: 30 idle ticks, 115 kernel ticks, 1558 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 290 reads, 117 writes
+hd1:0: 0 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 1192 characters output
+Keyboard: 0 keys pressed
+Exception: 4 page faults
+Powering off...
+Copying tests/filesys/extended/dir-vine.tar out of /tmp/zH3xbvKvCQ.dsk...

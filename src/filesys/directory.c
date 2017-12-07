@@ -26,8 +26,15 @@ struct dir_entry
 bool
 dir_create (disk_sector_t sector, disk_sector_t parent, size_t entry_cnt) 
 {
-  if (!inode_create (sector, entry_cnt * sizeof (struct dir_entry)))
+#ifdef INODE_PRINT
+  printf ("dir_create - sector : %d, parent : %d, cnt : %d...\n",\
+      sector, parent, entry_cnt);
+#endif
+  if (!inode_create (sector, entry_cnt * sizeof (struct dir_entry), 1))
     return false;
+#ifdef INODE_PRINT
+  printf ("dir_create - inode_create done...\n");
+#endif
 
   struct dir *d = dir_open (inode_open (sector));
   if (!dir_add (d, ".", sector) || !dir_add (d, "..", parent))
@@ -48,7 +55,7 @@ dir_open (struct inode *inode)
   if (inode != NULL && dir != NULL)
     {
       dir->inode = inode;
-      dir->pos = 0;
+      dir->pos = 2 * sizeof (struct dir_entry);
       return dir;
     }
   else
@@ -213,6 +220,12 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
+  if (inode_get_inumber (inode) == thread_current ()->current_dir)
+    goto done;
+
+  if (inode_get_info (inode) == 1 && !dir_is_empty (inode))
+    goto done;
+
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
@@ -246,3 +259,20 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
     }
   return false;
 }
+
+/* return true if dir is empty except . and .. */
+bool
+dir_is_empty (struct inode *inode)
+{
+  struct dir_entry e;
+  off_t pos = 2 * sizeof (struct dir_entry);
+
+  while (inode_read_at (inode, &e, sizeof e, pos) == sizeof e) 
+    {
+      pos += sizeof e;
+      if (e.in_use)
+          return false;
+    }
+  return true;
+}
+

@@ -52,6 +52,9 @@ struct file_elem
 {
   struct list_elem elem;
   struct file* f;
+#ifdef FILESYS
+  struct dir *d;
+#endif
   int fd;
 };
 

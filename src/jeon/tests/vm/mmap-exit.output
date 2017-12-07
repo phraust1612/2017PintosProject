@@ -1,0 +1,42 @@
+Copying tests/vm/mmap-exit into /tmp/IgOGMXPgwe.dsk...
+Copying tests/vm/child-mm-wrt into /tmp/IgOGMXPgwe.dsk...
+Writing command line to /tmp/wUf4kCJMs9.dsk...
+warning: can't find squish-pty, so terminal input will fail
+bochs -q
+Kernel command line: -q -f put mmap-exit put child-mm-wrt run mmap-exit
+Pintos booting with 4,096 kB RAM...
+368 pages available in kernel pool.
+368 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hd0:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00011"
+hd0:1: detected 4,032 sector (1 MB) disk, model "Generic 1234", serial "BXHD00012"
+hd1:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00021"
+hd1:1: detected 8,064 sector (3 MB) disk, model "Generic 1234", serial "BXHD00022"
+Formatting file system...done.
+Boot complete.
+Putting 'mmap-exit' into the file system...
+Putting 'child-mm-wrt' into the file system...
+Executing 'mmap-exit':
+(mmap-exit) begin
+(child-mm-wrt) begin
+(child-mm-wrt) create "sample.txt"
+(child-mm-wrt) open "sample.txt"
+(child-mm-wrt) mmap "sample.txt"
+(child-mm-wrt) end
+child-mm-wrt: exit(0)
+(mmap-exit) open "sample.txt" for verification
+(mmap-exit) verified contents of "sample.txt"
+(mmap-exit) close "sample.txt"
+(mmap-exit) end
+mmap-exit: exit(0)
+Execution of 'mmap-exit' complete.
+Timer: 1462 ticks
+Thread: 30 idle ticks, 1177 kernel ticks, 258 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 467 reads, 402 writes
+hd1:0: 200 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 1269 characters output
+Keyboard: 0 keys pressed
+Exception: 11 page faults
+Powering off...

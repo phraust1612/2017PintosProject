@@ -28,7 +28,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   struct file_elem* f_elem;
   struct child_elem* t_elem;
   struct dir *dir;
-  struct inode *inode;
+  struct inode *inode, *dummy_inode;
   struct thread* tcurrent = thread_current();
   if (is_user_vaddr (f->esp))
     set_new_dirty_page (f->esp, tcurrent);
@@ -117,7 +117,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       buffer = (const char*)* ((int*)f->esp + 1);
       if(check_valid_pointer((void*)buffer, f))
       {
-        f_elem = palloc_get_page(PAL_ZERO);
+        f_elem = malloc (sizeof (struct file_elem));
         if(f_elem == NULL)
         {
           f->eax = -1;
@@ -125,10 +125,14 @@ syscall_handler (struct intr_frame *f UNUSED)
         }
         file_lock_acquire();
         f_elem->f = filesys_open((const char*)buffer);
+#ifdef FILESYS
+        if (!f_elem->f) f_elem->d = NULL;
+        else f_elem->d = dir_open (file_get_inode (f_elem->f));
+#endif
         file_lock_release();
         if(f_elem->f == NULL)
         {
-          palloc_free_page(f_elem);
+          free (f_elem);
           f->eax = -1;
         }
         else
@@ -276,10 +280,10 @@ syscall_handler (struct intr_frame *f UNUSED)
         if(f_elem != NULL)
         {
           file_lock_acquire();
-          if (!exist_mmap_elem (f_elem->fd, tcurrent))
-            file_close((struct file*) f_elem->f);
+          file_close((struct file*) f_elem->f);
+          dir_close (f_elem->d);
           list_remove(&f_elem->elem);
-          palloc_free_page(f_elem);
+          free (f_elem);
           file_lock_release();
         }
       }
@@ -332,7 +336,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           mi->start_vaddr = buffer;
           mi->read_bytes = mapped_size;
           mi->fd = *arg;
-          mi->f = f_elem->f;
+          mi->f = file_reopen (f_elem->f);
           mi->mid = tcurrent->next_mid;
           tcurrent->next_mid++;
 
@@ -358,7 +362,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             pi->writable = true;  // TODO: ???
             pi->swap_outed = false;
             pi->swap_index = 0;
-            pi->f = f_elem->f;
+            pi->f = mi->f;
             pi->mmaped = true;
             supplementary_lock_acquire(tcurrent);
             hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
@@ -399,6 +403,15 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     case SYS_CHDIR:
       buffer = (void*)* ((int*)f->esp + 1); // dir name
+
+      ret_ptr = palloc_get_page (PAL_ZERO);
+      if (!ret_ptr)
+      {
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      strlcpy (ret_ptr, buffer, PGSIZE);
+
       if (check_valid_pointer (buffer, f))
       {
         if (buffer[0] == '/') // absolute path
@@ -408,12 +421,13 @@ syscall_handler (struct intr_frame *f UNUSED)
         if (dir == NULL)
         {
           file_lock_release ();
+          palloc_free_page (pg_round_down (ret_ptr));
           f->eax = false;
           printf("%s: exit(%d)\n", tcurrent->name, -1);
           thread_exit();
         }
 
-        for (ret_ptr = strtok_r (buffer, "/", &next_ptr);
+        for (ret_ptr = strtok_r (ret_ptr, "/", &next_ptr);
             ret_ptr != NULL;
             ret_ptr = strtok_r (NULL, "/", &next_ptr))
         {
@@ -430,34 +444,63 @@ syscall_handler (struct intr_frame *f UNUSED)
             f->eax = true;
             tcurrent->current_dir = \
                 inode_get_inumber (dir_get_inode (dir));
+#ifdef INODE_PRINT
+            printf("current_dir : %d\n", \
+                tcurrent->current_dir);
+#endif
           }
         }
         dir_close (dir);
+        palloc_free_page (pg_round_down (ret_ptr));
       }
       else
       {
         f->eax = false;
+        palloc_free_page (pg_round_down (ret_ptr));
         printf("%s: exit(%d)\n", tcurrent->name, -1);
         thread_exit();
       }
       break;
     case SYS_MKDIR:
       buffer = (void*)* ((int*)f->esp + 1); // dir name
+
+      ret_ptr = palloc_get_page (PAL_ZERO);
+      if (!ret_ptr)
+      {
+        printf("%s: exit(%d)\n", tcurrent->name, -1);
+        thread_exit();
+      }
+      strlcpy (ret_ptr, buffer, PGSIZE);
+
       if (check_valid_pointer (buffer, f))
       {
         if (buffer[0] == '/') // absolute path
-          dir = dir_open_root ();
+        {
+          inode = inode_open (ROOT_DIR_SECTOR);
+          dir = dir_open (inode);
+        }
         else // relative path
-          dir = dir_open (inode_open (tcurrent->current_dir));
+        {
+          inode = inode_open (tcurrent->current_dir);
+          dir = dir_open (inode);
+        }
         if (dir == NULL)
         {
           file_lock_release ();
           f->eax = false;
+          palloc_free_page (pg_round_down (ret_ptr));
           printf("%s: exit(%d)\n", tcurrent->name, -1);
           thread_exit();
         }
+        f->eax = false;
+#ifdef INODE_PRINT
+        printf ("inode : %p...\n", inode);
 
-        for (ret_ptr = strtok_r (buffer, "/", &next_ptr);
+        printf ("sys_mkdir - ret_ptr : %p, next_ptr : %p...\n",
+            ret_ptr, next_ptr);
+#endif
+
+        for (ret_ptr = strtok_r (ret_ptr, "/", &next_ptr);
             ret_ptr != NULL;
             ret_ptr = strtok_r (NULL, "/", &next_ptr))
         {
@@ -474,23 +517,29 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
           if (next_ptr[0] == '\0')
           {
-            if (dir_lookup (dir, ret_ptr, &inode))
+            if (dir_lookup (dir, ret_ptr, &dummy_inode))
               /* 마지막인데 이미 존재한 경우 return false */
               f->eax = false;
             else
             {
               free_map_allocate (1, &new_sector);
+#ifdef INODE_PRINT
+              printf ("new_sector : %d, inode : %p...\n", \
+                  new_sector, inode);
+#endif
               dir_create (new_sector, inode_get_inumber (inode), 16);
               dir_add (dir, ret_ptr, new_sector);
               f->eax = true;
             }
           }
         }
+        palloc_free_page (pg_round_down (ret_ptr));
         dir_close (dir);
       }
       else
       {
         f->eax = false;
+        palloc_free_page (pg_round_down (ret_ptr));
         printf("%s: exit(%d)\n", tcurrent->name, -1);
         thread_exit();
       }
@@ -505,7 +554,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         if(f_elem != NULL)
         {
           file_lock_acquire();
-          dir = dir_open (file_get_inode (f_elem->f));
+          dir = f_elem->d;
           if (dir == NULL)
           {
             file_lock_release ();
@@ -515,7 +564,6 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
 
           f->eax = dir_readdir (dir, buffer);
-          free (dir);
           file_lock_release();
         }
         else f->eax = false;
@@ -535,7 +583,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         if(f_elem != NULL)
         {
           file_lock_acquire();
-          f->eax = inode_is_dir (file_get_inode (f_elem->f));
+          f->eax = 1 == inode_get_info (file_get_inode (f_elem->f));
           file_lock_release();
         }
         else f->eax = false;

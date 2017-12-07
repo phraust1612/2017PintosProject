@@ -1,0 +1,53 @@
+Copying tests/filesys/extended/grow-two-files into /tmp/HfdJrjNz9N.dsk...
+Copying tests/filesys/extended/tar into /tmp/HfdJrjNz9N.dsk...
+Writing command line to /tmp/5TXq7zjvns.dsk...
+warning: can't find squish-pty, so terminal input will fail
+bochs -q
+Kernel command line: -q -f put grow-two-files put tar run grow-two-files
+Pintos booting with 4,096 kB RAM...
+368 pages available in kernel pool.
+368 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hd0:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00011"
+hd0:1: detected 4,032 sector (1 MB) disk, model "Generic 1234", serial "BXHD00012"
+hd1:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00021"
+hd1:1: detected 8,064 sector (3 MB) disk, model "Generic 1234", serial "BXHD00022"
+Formatting file system...done.
+Boot complete.
+Putting 'grow-two-files' into the file system...
+Putting 'tar' into the file system...
+Executing 'grow-two-files':
+(grow-two-files) begin
+(grow-two-files) create "a"
+(grow-two-files) create "b"
+(grow-two-files) open "a"
+(grow-two-files) open "b"
+(grow-two-files) write "a" and "b" alternately
+(grow-two-files) close "a"
+(grow-two-files) close "b"
+(grow-two-files) open "a" for verification
+(grow-two-files) 163 bytes read starting at offset 0 in "a" differ from expected.
+(grow-two-files) Showing first differing 64 bytes.
+(grow-two-files) Data actually read:
+00000000  62 9f 43 cc 38 20 ad c4-2a 5f 2e ab 32 da 0d f1 |b.C.8 ..*_..2...|
+00000010  b4 bb 94 f8 40 64 66 3b-e2 3e be 51 b7 39 2e f1 |....@df;.>.Q.9..|
+00000020  2e c4 fa db d2 bc 9d b4-52 3e ad 86 b8 7b 03 75 |........R>...{.u|
+00000030  1e 87 c5 26 da 8f 3b 82-0a b8 6d 3b 29 9c 11 c4 |...&..;...m;)...|
+(grow-two-files) Expected data:
+00000000  de 18 89 41 a3 37 5d 3a-8a 06 1e 67 57 6e 92 6d |...A.7]:...gWn.m|
+00000010  c7 1a 7f a3 f0 cc eb 97-45 2b 4d 32 27 96 5f 9e |........E+M2'._.|
+00000020  a8 cc 75 07 6d 9f b9 c5-41 7a a5 cb 30 fc 22 19 |..u.m...Az..0.".|
+00000030  8b 34 98 2d bb 62 9e c0-4b 4f 8b 05 a0 71 08 50 |.4.-.b..KO...q.P|
+(grow-two-files) 163 bytes read starting at offset 0 in "a" differ from expected: FAILED
+grow-two-files: exit(1)
+Execution of 'grow-two-files' complete.
+Timer: 1922 ticks
+Thread: 30 idle ticks, 1241 kernel ticks, 654 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 507 reads, 442 writes
+hd1:0: 215 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 2142 characters output
+Keyboard: 0 keys pressed
+Exception: 9 page faults
+Powering off...

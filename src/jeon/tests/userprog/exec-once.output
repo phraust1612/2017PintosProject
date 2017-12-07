@@ -1,0 +1,35 @@
+Copying tests/userprog/exec-once into /tmp/SBKyMWzcL0.dsk...
+Copying tests/userprog/child-simple into /tmp/SBKyMWzcL0.dsk...
+Writing command line to /tmp/aq0xiUgFN6.dsk...
+warning: can't find squish-pty, so terminal input will fail
+bochs -q
+Kernel command line: -q -f put exec-once put child-simple run exec-once
+Pintos booting with 4,096 kB RAM...
+368 pages available in kernel pool.
+368 pages available in user pool.
+Calibrating timer...  204,600 loops/s.
+hd0:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00011"
+hd0:1: detected 4,032 sector (1 MB) disk, model "Generic 1234", serial "BXHD00012"
+hd1:0: detected 1,008 sector (504 kB) disk, model "Generic 1234", serial "BXHD00021"
+hd1:1: detected 8,064 sector (3 MB) disk, model "Generic 1234", serial "BXHD00022"
+Formatting file system...done.
+Boot complete.
+Putting 'exec-once' into the file system...
+Putting 'child-simple' into the file system...
+Executing 'exec-once':
+(exec-once) begin
+(child-simple) run
+child-simple: exit(81)
+(exec-once) end
+exec-once: exit(0)
+Execution of 'exec-once' complete.
+Timer: 1326 ticks
+Thread: 30 idle ticks, 1144 kernel ticks, 155 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 449 reads, 384 writes
+hd1:0: 195 reads, 0 writes
+hd1:1: 0 reads, 0 writes
+Console: 1024 characters output
+Keyboard: 0 keys pressed
+Exception: 9 page faults
+Powering off...
