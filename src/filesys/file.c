@@ -168,3 +168,47 @@ file_tell (struct file *file)
   ASSERT (file != NULL);
   return file->pos;
 }
+
+#ifdef SYNRW
+void
+file_writer_lock_acquire (struct file *f)
+{
+  inode_writer_lock_acquire (file_get_inode (f));
+}
+
+void
+file_mutex_acquire (struct file *f)
+{
+  inode_mutex_acquire (file_get_inode (f));
+}
+
+void
+file_writer_lock_release (struct file *f)
+{
+  inode_writer_lock_release (file_get_inode (f));
+}
+
+void
+file_mutex_release (struct file *f)
+{
+  inode_mutex_release (file_get_inode (f));
+}
+
+uint32_t
+file_readcount (struct file *f)
+{
+  return inode_readcount (file_get_inode (f));
+}
+
+void
+file_readcount_pp (struct file *f)
+{
+  inode_readcount_pp (file_get_inode (f));
+}
+
+void
+file_readcount_mm (struct file *f)
+{
+  inode_readcount_mm (file_get_inode (f));
+}
+#endif

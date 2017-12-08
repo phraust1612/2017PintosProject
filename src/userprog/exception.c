@@ -4,6 +4,7 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#define STACK_BASE 0xb8000000
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -158,7 +159,6 @@ page_fault (struct intr_frame *f)
 
 
   struct thread* tcurrent = thread_current();
-  void* user_esp;
   if (is_user_vaddr (f->esp))
     set_new_dirty_page (f->esp, tcurrent);
   ASSERT (is_user_vaddr (tcurrent->user_esp));
@@ -226,7 +226,11 @@ page_fault (struct intr_frame *f)
   if (faulted_page == NULL)
   {
     // do stack growth
-    if (fault_addr > tcurrent->user_esp - 0x100
+    bool checkheuristic = (tcurrent->user_esp <= fault_addr \
+        || fault_addr == tcurrent->user_esp - 4 \
+        || fault_addr == tcurrent->user_esp - 32);
+    if (fault_addr >= STACK_BASE
+        && checkheuristic
         && is_user_vaddr(fault_addr))
     {
       struct page* pi = malloc (sizeof(struct page));

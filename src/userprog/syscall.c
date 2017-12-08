@@ -184,9 +184,29 @@ syscall_handler (struct intr_frame *f UNUSED)
           f_elem = find_file(*arg);
           if(f_elem != NULL/* && pagedir_is_writable(tcurrent->pagedir, buffer) */)
           {
-            file_lock_acquire();
+#ifdef SYNRW
+            file_mutex_acquire (f_elem->f);
+            file_readcount_pp (f_elem->f);
+            if (file_readcount (f_elem->f) == 1)
+              file_writer_lock_acquire (f_elem->f);
+            file_mutex_release (f_elem->f);
+#else
+            file_lock_acquire ();
+#endif
             f->eax = file_read(f_elem->f, (void*)buffer, (int) *size);
-            file_lock_release();
+#ifdef FILESIZE_PRINT
+            printf ("sys_read - size : %d\n",\
+                inode_length (file_get_inode (f_elem->f)));
+#endif
+#ifdef SYNRW
+            file_mutex_acquire (f_elem->f);
+            file_readcount_mm (f_elem->f);
+            if (file_readcount (f_elem->f) == 0)
+              file_writer_lock_release (f_elem->f);
+            file_mutex_release (f_elem->f);
+#else
+            file_lock_release ();
+#endif
           }
           else
             f->eax = -1;
@@ -220,9 +240,21 @@ syscall_handler (struct intr_frame *f UNUSED)
             f->eax = 0;
           else
           {
-            file_lock_acquire();
+#ifdef SYNRW
+            file_writer_lock_acquire (f_elem->f);
+#else
+            file_lock_acquire ();
+#endif
             f->eax = file_write (f_elem->f, (void*) buffer, (int) *size);
-            file_lock_release();
+#ifdef FILESIZE_PRINT
+            printf ("sys_write - size : %d\n", \
+                inode_length (file_get_inode (f_elem->f)));
+#endif
+#ifdef SYNRW
+            file_writer_lock_release (f_elem->f);
+#else
+            file_lock_release ();
+#endif
           }
         }
       }

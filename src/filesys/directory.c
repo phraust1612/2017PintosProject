@@ -39,10 +39,19 @@ dir_create (disk_sector_t sector, disk_sector_t parent, size_t entry_cnt)
   struct dir *d = dir_open (inode_open (sector));
   if (!dir_add (d, ".", sector) || !dir_add (d, "..", parent))
   {
+#ifdef INODE_PRINT
+  printf("dir create - dir add fail\n");
+#endif
     dir_close (d);
     return false;
   }
+#ifdef INODE_PRINT
+  printf("dir create - dir add success\n");
+#endif
   dir_close (d);
+#ifdef INODE_PRINT
+  printf ("dir_create ends with true\n");
+#endif
   return true;
 }
 
@@ -183,15 +192,28 @@ dir_add (struct dir *dir, const char *name, disk_sector_t inode_sector)
      Otherwise, we'd need to verify that we didn't get a short
      read due to something intermittent such as low memory. */
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-       ofs += sizeof e) 
+       ofs += sizeof e) {
+#ifdef INODE_PRINT
+    printf("dir add - finding vacant entry, offset : %d\n", ofs);
+#endif
     if (!e.in_use)
       break;
+  }
+#ifdef INODE_PRINT
+  printf("dir add - entry found?");
+#endif
 
   /* Write slot. */
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
+#ifdef SYNRW
+  inode_writer_lock_acquire (dir->inode);
+#endif
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+#ifdef SYNRW
+  inode_writer_lock_release (dir->inode);
+#endif
 
  done:
   return success;
@@ -228,8 +250,19 @@ dir_remove (struct dir *dir, const char *name)
 
   /* Erase directory entry. */
   e.in_use = false;
+#ifdef SYNRW
+  inode_writer_lock_acquire (dir->inode);
+#endif
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
+#ifdef SYNRW
+  {
+    inode_writer_lock_release (dir->inode);
+#endif
     goto done;
+#ifdef SYNRW
+  }
+  inode_writer_lock_release (dir->inode);
+#endif
 
   /* Remove inode. */
   inode_remove (inode);

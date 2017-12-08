@@ -28,6 +28,7 @@ typedef int mapid_t;
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+// #define FILESIZE_PRINT
 
 /* States in a thread's life cycle. */
 enum thread_status

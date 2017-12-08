@@ -25,11 +25,21 @@ int inode_open_cnt (struct inode *);
 // #define INODE_PRINT
 #define EXTENSE_DEBUG
 #define SUBDIR_DEBUG
+// #define SYNRW
 #ifdef EXTENSE_DEBUG
 #define DIRECT_NO 123
 #include "filesys/cache.h"
-bool jeonduhwan (uint32_t sectors, disk_sector_t inode_sector, off_t length, int add_direct_idx, uint32_t info);
+bool allocate_inode_disk (uint32_t sectors, disk_sector_t inode_sector, off_t length, int add_direct_idx, uint32_t info);
 void release_inode_disk (uint32_t sectors, disk_sector_t inode_sector);
+#endif
+#ifdef SYNRW
+void inode_writer_lock_acquire (struct inode *);
+void inode_writer_lock_release (struct inode *);
+void inode_mutex_acquire (struct inode *);
+void inode_mutex_release (struct inode *);
+uint32_t inode_readcount (struct inode *);
+void inode_readcount_pp (struct inode *);
+void inode_readcount_mm (struct inode *);
 #endif
 
 #endif /* filesys/inode.h */

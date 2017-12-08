@@ -25,5 +25,14 @@ void file_allow_write (struct file *);
 void file_seek (struct file *, off_t);
 off_t file_tell (struct file *);
 off_t file_length (struct file *);
+#ifdef SYNRW
+void file_writer_lock_acquire (struct file *);
+void file_writer_lock_release (struct file *);
+void file_mutex_acquire (struct file *);
+void file_mutex_release (struct file *);
+uint32_t file_readcount (struct file *);
+void file_readcount_pp (struct file *);
+void file_readcount_mm (struct file *);
+#endif
 
 #endif /* filesys/file.h */

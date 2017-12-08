@@ -170,6 +170,10 @@ process_exit (void)
   while (elem_pointer != list_end(&tcurrent->child_list))
   {
     i = list_entry(elem_pointer , struct child_elem, elem);
+#ifdef FILESIZE_PRINT
+    printf ("parent : %d , child : %d\n",\
+        tcurrent->tid, i->child_tid);
+#endif
     lock_release(&tcurrent->finding_sema_lock);
     process_wait(i->child_tid);
     lock_acquire(&tcurrent->finding_sema_lock);
