@@ -19,6 +19,9 @@
 #ifdef FILESYS
 #include "devices/disk.h"
 #endif
+#ifndef __FILESYS_CACHE_H
+#include "filesys/cache.h"
+#endif
 
 typedef int mapid_t;
 
@@ -188,6 +191,7 @@ extern bool thread_mlfqs;
 
 void thread_init (void);
 void thread_start (void);
+void write_back_start (void);
 
 void thread_tick (void);
 void thread_print_stats (void);

@@ -115,6 +115,7 @@ main (void)
   disk_init ();
   filesys_init (format_filesys);
   swap_table_bitmap_init ();
+  write_back_start ();
 #endif
 
   printf ("Boot complete.\n");

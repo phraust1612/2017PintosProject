@@ -280,8 +280,8 @@ syscall_handler (struct intr_frame *f UNUSED)
         if(f_elem != NULL)
         {
           file_lock_acquire();
-          file_close((struct file*) f_elem->f);
-          dir_close (f_elem->d);
+          file_close ((struct file*) f_elem->f);
+          free (f_elem->d);
           list_remove(&f_elem->elem);
           free (f_elem);
           file_lock_release();

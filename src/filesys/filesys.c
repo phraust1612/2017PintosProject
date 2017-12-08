@@ -124,6 +124,8 @@ filesys_create (const char *name, off_t initial_size)
                   && dir_add (dir, ret_ptr, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
+
+  buffer_cache_write_back ();
   dir_close (dir);
 
   palloc_free_page (pg_round_down (ret_ptr));
@@ -198,7 +200,7 @@ filesys_open (const char *name)
     dir_lookup (dir, name, &inode);
 #endif
 
-  return file_open (inode_reopen (inode));
+  return file_open (inode);
 }
 
 /* Deletes the file named NAME.

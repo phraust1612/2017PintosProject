@@ -6,6 +6,7 @@
 
 /* Number of timer interrupts per second. */
 #define TIMER_FREQ 100
+#define WRITE_BACK_PERIOD 25
 
 void timer_init (void);
 void timer_calibrate (void);

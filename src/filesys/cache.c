@@ -26,7 +26,7 @@ buffer_cache_init (void)
   lookup_start_index = 0;
 }
 
-struct file_cache *
+bool
 buffer_cache_release (disk_sector_t sec_no)
 {
   uint32_t i = 0;
@@ -36,6 +36,8 @@ buffer_cache_release (disk_sector_t sec_no)
   {
     if (buffer_cache[i].sector_no == sec_no && buffer_cache[i].allocated)
     {
+      if (buffer_cache[i].dirty)
+        disk_write (filesys_disk, buffer_cache[i].sector_no, &buffer_cache[i].data);
       ans = &buffer_cache[i];
       ans->allocated = false;
       lock_release (&buffer_cache_lock);
@@ -91,6 +93,9 @@ buffer_cache_find_victim (void)
 void
 buffer_cache_read (disk_sector_t sec_no, void *buffer, off_t size, off_t offset)
 {
+#ifdef INODE_PRINT
+  printf ("hi\n");
+#endif
   uint32_t i;
   int ans = -1;
   lock_acquire (&buffer_cache_lock);
@@ -153,3 +158,13 @@ buffer_cache_write (disk_sector_t sec_no, void *buffer, off_t size, off_t offset
   lock_release (&buffer_cache_lock);
 }
 
+void
+buffer_cache_write_back (void)
+{
+  lock_acquire (&buffer_cache_lock);
+  int i;
+  for (i = 0; i < BUFFER_CACHE_SIZE; i++)
+    if (buffer_cache[i].allocated && buffer_cache[i].dirty)
+      disk_write (filesys_disk, buffer_cache[i].sector_no, &buffer_cache[i].data);
+  lock_release (&buffer_cache_lock);
+}

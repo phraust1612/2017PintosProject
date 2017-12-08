@@ -35,6 +35,10 @@ static struct thread *idle_thread;
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
 
+/* write back kernel thread, which repeats for every 
+ * WRITE_BACK_PERIOD */
+static struct thread *write_back_thread;
+
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
@@ -66,6 +70,7 @@ bool thread_mlfqs;
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
+static void write_back (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
@@ -95,7 +100,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
-  lock_init(&file_rw_lock);
+  lock_init (&file_rw_lock);
   frame_table_init ();
 
   /* Set up a thread structure for the running thread. */
@@ -103,6 +108,19 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+}
+
+/* make write back thread */
+void
+write_back_start (void)
+{
+  struct semaphore write_back_started;
+  sema_init (&write_back_started, 0);
+  thread_create ("write_back_thread",\
+      PRI_DEFAULT, write_back, &write_back_started);
+
+  intr_enable ();
+  sema_down (&write_back_started);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -470,6 +488,20 @@ idle (void *idle_started_ UNUSED)
          7.11.1 "HLT Instruction". */
       asm volatile ("sti; hlt" : : : "memory");
     }
+}
+
+static void
+write_back (void *write_back_started_ UNUSED)
+{
+  struct semaphore *write_back_started = write_back_started_;
+  write_back_thread = thread_current ();
+  sema_up (write_back_started);
+
+  for (;;)
+  {
+    timer_sleep (WRITE_BACK_PERIOD);
+    buffer_cache_write_back ();
+  }
 }
 
 /* Function used as the basis for a kernel thread. */

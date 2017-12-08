@@ -11,6 +11,9 @@
 #ifndef THREADS_THREAD_H
 #include "threads/thread.h"
 #endif
+#ifndef __FILESYS_CACHE_H
+#include "filesys/cache.h"
+#endif
 
 /* Disk used for file system. */
 extern struct disk *filesys_disk;

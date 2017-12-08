@@ -186,6 +186,7 @@ process_exit (void)
 
   file_close(tcurrent->exec_file);
 
+  /* mmap list 지움 */
   struct mmap_elem* mi = NULL;
   elem_pointer = list_begin (&tcurrent->mmap_list);
   while (elem_pointer != list_end (&tcurrent->mmap_list))

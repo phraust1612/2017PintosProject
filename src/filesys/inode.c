@@ -282,6 +282,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       printf("inode_read_at = sector idx : %d\n", sector_idx);
 #endif
       buffer_cache_read (sector_idx, buffer + bytes_read, read_bytes, sector_ofs);
+      /* zero bytes를 비워줄 수도 있다. */
       sector_ofs = 0;
 
       /* Advance. */
@@ -544,6 +545,7 @@ release_inode_disk (uint32_t sectors, disk_sector_t inode_sector)
     release_inode_disk (sectors - direct_alloc_num, disk_inode->indirect);
     free_map_release (disk_inode->indirect, 1);
     buffer_cache_release (disk_inode->indirect);
+    /* ??? */
   }
 
   for (i = 0; i < direct_alloc_num; i++)
