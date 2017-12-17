@@ -130,7 +130,9 @@ pagedir_get_page (uint32_t *pd, const void *uaddr)
   ASSERT (is_user_vaddr (uaddr));
 
   pte = lookup_page (pd, uaddr, false);
+#ifdef PRJ3
   pagedir_set_accessed(pd, uaddr, true);
+#endif
   if (pte != NULL && (*pte & PTE_P) != 0)
     return pte_get_page (*pte) + pg_ofs (uaddr);
   else
@@ -186,6 +188,7 @@ pagedir_set_dirty (uint32_t *pd, const void *vpage, bool dirty)
     }
 }
 
+#ifdef PRJ3
 /* Returns true if the PTE for virtual page VPAGE in PD is dirty,
    that is, if the page has been modified since the PTE was
    installed.
@@ -215,6 +218,14 @@ pagedir_set_stack (uint32_t *pd, const void *vpage, bool dirty)
     }
 }
 
+bool
+pagedir_is_writable (uint32_t *pd, const void *vpage) 
+{
+  uint32_t *pte = lookup_page (pd, vpage, false);
+  return pte != NULL && (*pte & PTE_W) != 0;
+}
+#endif
+
 /* Returns true if the PTE for virtual page VPAGE in PD has been
    accessed recently, that is, between the time the PTE was
    installed and the last time it was cleared.  Returns false if
@@ -224,14 +235,6 @@ pagedir_is_accessed (uint32_t *pd, const void *vpage)
 {
   uint32_t *pte = lookup_page (pd, vpage, false);
   return pte != NULL && (*pte & PTE_A) != 0;
-}
-
-
-bool
-pagedir_is_writable (uint32_t *pd, const void *vpage) 
-{
-  uint32_t *pte = lookup_page (pd, vpage, false);
-  return pte != NULL && (*pte & PTE_W) != 0;
 }
 
 /* Sets the accessed bit to ACCESSED in the PTE for virtual page

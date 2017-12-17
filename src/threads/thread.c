@@ -13,6 +13,8 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#endif
+#ifdef PRJ3
 #include "filesys/file.h"
 #endif
 
@@ -35,15 +37,19 @@ static struct thread *idle_thread;
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
 
+#ifdef PRJ4
 /* write back kernel thread, which repeats for every 
  * WRITE_BACK_PERIOD */
 static struct thread *write_back_thread;
+#endif
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+#ifdef USERPROG
 /* lock used for open, close, etc */
 static struct lock file_rw_lock;
+#endif
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -70,7 +76,9 @@ bool thread_mlfqs;
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
-static void write_back (void *aux UNUSED);
+#ifdef PRJ4
+static void repeat_write_back (void *aux UNUSED);
+#endif
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
@@ -100,8 +108,12 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+#ifdef USERPROG
   lock_init (&file_rw_lock);
+#endif
+#ifdef PRJ3
   frame_table_init ();
+#endif
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -110,6 +122,7 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();
 }
 
+#ifdef PRJ4
 /* make write back thread */
 void
 write_back_start (void)
@@ -117,11 +130,12 @@ write_back_start (void)
   struct semaphore write_back_started;
   sema_init (&write_back_started, 0);
   thread_create ("write_back_thread",\
-      PRI_DEFAULT, write_back, &write_back_started);
+      PRI_DEFAULT, repeat_write_back, &write_back_started);
 
   intr_enable ();
   sema_down (&write_back_started);
 }
+#endif
 
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
@@ -490,8 +504,9 @@ idle (void *idle_started_ UNUSED)
     }
 }
 
+#ifdef PRJ4
 static void
-write_back (void *write_back_started_ UNUSED)
+repeat_write_back (void *write_back_started_ UNUSED)
 {
   struct semaphore *write_back_started = write_back_started_;
   write_back_thread = thread_current ();
@@ -503,6 +518,7 @@ write_back (void *write_back_started_ UNUSED)
     buffer_cache_write_back ();
   }
 }
+#endif
 
 /* Function used as the basis for a kernel thread. */
 static void
@@ -554,22 +570,26 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->plock_acq = NULL;
   list_init(&t->lock_own_list);
+  initial_thread->wakeup_tick = 0;
+#ifdef USERPROG
   t->tparent = running_thread();
   if(!is_thread(t->tparent)) t->tparent = t;
   // recursively set current thread's level
   t->next_fd = 2;
-  t->next_mid = 0;
   t->child_success = false;
   t->exec_file = NULL;
-  t->user_esp = 0xc0000000 - 1;
-  lock_init (&t->supplementary_page_lock);
   sema_init(&t->creation_sema,0);
   list_init(&t->file_list);
-  list_init (&t->mmap_list);
   list_init(&t->child_list);
   lock_init(&t->finding_sema_lock);
-  initial_thread->wakeup_tick = 0;
-#ifdef FILESYS
+#endif
+#ifdef PRJ3
+  t->next_mid = 0;
+  t->user_esp = 0xc0000000 - 1;
+  lock_init (&t->supplementary_page_lock);
+  list_init (&t->mmap_list);
+#endif
+#ifdef PRJ4
   t->current_dir = 1;
 #endif
 }
@@ -704,6 +724,20 @@ bool higher_priority (struct list_elem* x, struct list_elem* y, void* aux UNUSED
   else return false;
 }
 
+void
+lock_release_all (struct thread* tcurrent)
+{
+  struct lock* i = NULL;
+  struct list_elem *elem_pointer = list_begin (&tcurrent->lock_own_list);
+  while (elem_pointer != list_end (&tcurrent->lock_own_list))
+  {
+    i = list_entry (elem_pointer, struct lock, own_elem);
+    elem_pointer = list_next (elem_pointer);
+    lock_release (i);
+  }
+}
+
+#ifdef USERPROG
 /* return file_elem* with given fd */
 struct file_elem*
 find_file (int fd)
@@ -734,23 +768,6 @@ file_lock_release(void)
   lock_release(&file_rw_lock);
 }
 
-void
-file_lock_try_release (struct thread* t)
-{
-  if (file_rw_lock.holder == t)
-    lock_release (&file_rw_lock);
-}
-
-void supplementary_lock_acquire(struct thread* t)
-{
-  lock_acquire(&t->supplementary_page_lock);
-}
-
-void supplementary_lock_release(struct thread* t)
-{
-  lock_release(&t->supplementary_page_lock);
-}
-
 struct child_elem*
 find_child (tid_t tid, struct thread* t)
 {
@@ -771,6 +788,18 @@ find_child (tid_t tid, struct thread* t)
   }
   lock_release(&t->finding_sema_lock);
   return NULL;
+}
+#endif
+
+#ifdef PRJ3
+void supplementary_lock_acquire(struct thread* t)
+{
+  lock_acquire(&t->supplementary_page_lock);
+}
+
+void supplementary_lock_release(struct thread* t)
+{
+  lock_release(&t->supplementary_page_lock);
 }
 
 void
@@ -820,18 +849,12 @@ munmap_list (mapid_t target_mid)
         read_bytes -= real_read_bytes;
         count++;
       }
-//      file_lock_acquire ();
-//      file_seek (mi->f, prev_off);
-//      file_lock_release ();
 
       // tcurrent->mmap_list 에서 지운다.
       elem_pointer = list_remove (elem_pointer);
-//      if (find_file (mi->fd) == NULL)
-//      {
-        file_lock_acquire ();
-        file_close (mi->f);
-        file_lock_release ();
-//      }
+      file_lock_acquire ();
+      file_close (mi->f);
+      file_lock_release ();
       free (mi);
 
       return;
@@ -853,4 +876,31 @@ exist_mmap_elem (int fd, struct thread* tcurrent)
   }
   return false;
 }
+#endif
 
+#ifdef PRJ4
+void
+print_all_filelist (void)
+{
+  struct thread *tcurrent = thread_current ();
+  printf ("thread : %d, total filelist : %d\n",\
+      tcurrent->tid, list_size (&tcurrent->file_list));
+  struct file_elem* fi;
+  struct list_elem* elem_pointer = list_begin (&tcurrent->file_list);
+  while (elem_pointer != list_end (&tcurrent->file_list))
+  {
+    fi = list_entry (elem_pointer, struct file_elem, elem);
+    printf ("fd : %d, f : %p, d : %p\n",\
+        fi->fd, fi->f, fi->d);
+    elem_pointer = list_next (elem_pointer);
+  }
+}
+
+void
+print_all_pages (void)
+{
+  struct thread *tcurrent = thread_current ();
+  printf ("thread : %d, total pages : %d\n",\
+      tcurrent->tid, hash_size (&tcurrent->supplementary_page_table));
+}
+#endif

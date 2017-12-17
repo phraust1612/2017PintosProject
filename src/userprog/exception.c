@@ -84,25 +84,28 @@ kill (struct intr_frame *f)
      exception originated. */
   switch (f->cs)
     {
+#ifndef PRJ3
+    case SEL_KCSEG:
+      /* Kernel's code segment, which indicates a kernel bug.
+         Kernel code shouldn't throw exceptions.  (Page faults
+         may cause kernel exceptions--but they shouldn't arrive
+         here.)  Panic the kernel to make the point.  */
+      intr_dump_frame (f);
+      PANIC ("Kernel bug - unexpected interrupt in kernel"); 
+    case SEL_UCSEG:
+#else
     case SEL_UCSEG:
     case SEL_KCSEG:
+#endif
       /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
-#ifdef INODE_PRINT
+#ifdef PRINT_PF
       printf ("%s: dying due to interrupt %#04x (%s).\n", \
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
 #endif
       printf("%s: exit(%d)\n", thread_current()->name, -1);
       thread_exit (); 
-
-      /* Kernel's code segment, which indicates a kernel bug.
-         Kernel code shouldn't throw exceptions.  (Page faults
-         may cause kernel exceptions--but they shouldn't arrive
-         here.)  Panic the kernel to make the point.  */
-//    case SEL_KCSEG:
-//      intr_dump_frame (f);
-//      PANIC ("Kernel bug - unexpected interrupt in kernel"); 
 
     default:
       /* Some other code segment?  Shouldn't happen.  Panic the
@@ -157,7 +160,14 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
-
+#ifndef PRJ3
+  printf ("Page fault at %p: %s error %s page in %s context.\n",
+           fault_addr,
+           not_present ? "not present" : "rights violation",
+           write ? "writing" : "reading",
+           user ? "user" : "kernel");
+  kill (f);
+#else
   struct thread* tcurrent = thread_current();
   if (is_user_vaddr (f->esp))
     set_new_dirty_page (f->esp, tcurrent);
@@ -266,7 +276,7 @@ page_fault (struct intr_frame *f)
     }
     else
     {
-#ifdef INODE_PRINT
+#ifdef PRINT_PF
       printf ("not found from supplementary page table, \
         \norigin : %p, upage : %p, tcurrent_tid : %d, user_esp : %p...\n", \
         fault_addr, upage, tcurrent->tid, tcurrent->user_esp);
@@ -352,7 +362,7 @@ page_fault (struct intr_frame *f)
   }
   else
   {
-#ifdef INODE_PRINT
+#ifdef PRINT_PF
     printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
@@ -361,5 +371,6 @@ page_fault (struct intr_frame *f)
 #endif
     kill (f);
   }
+#endif
 }
 

@@ -1,4 +1,5 @@
 #include "filesys/cache.h"
+#ifdef PRJ4
 
 struct file_cache
 {
@@ -168,3 +169,4 @@ buffer_cache_write_back (void)
       disk_write (filesys_disk, buffer_cache[i].sector_no, &buffer_cache[i].data);
   lock_release (&buffer_cache_lock);
 }
+#endif

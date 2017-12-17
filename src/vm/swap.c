@@ -1,4 +1,5 @@
 #include "vm/swap.h"
+#ifdef PRJ3
 
 
 static struct list frame_table;
@@ -130,12 +131,6 @@ frame_table_size (void)
   return list_size (&frame_table);
 }
 
-void
-frame_lock_try_release (struct thread* t)
-{
-  if (frame_lock.holder == t)
-    lock_release (&frame_lock);
-}
 
 void 
 swap_lock_acquire (void)
@@ -149,9 +144,4 @@ swap_lock_release (void)
   lock_release (&swap_lock);
 }
 
-void
-swap_lock_try_release (struct thread* t)
-{
-  if (swap_lock.holder == t)
-    lock_release (&swap_lock);
-}
+#endif

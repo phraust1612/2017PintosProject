@@ -94,8 +94,10 @@ file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs)
 off_t
 file_write (struct file *file, const void *buffer, off_t size) 
 {
-  if (inode_get_info (file->inode))
+#ifdef PRJ4
+  if (inode_is_directory (file->inode))
     return -1;
+#endif
   off_t bytes_written = inode_write_at (file->inode, buffer, size, file->pos);
   file->pos += bytes_written;
   return bytes_written;
@@ -168,47 +170,3 @@ file_tell (struct file *file)
   ASSERT (file != NULL);
   return file->pos;
 }
-
-#ifdef SYNRW
-void
-file_writer_lock_acquire (struct file *f)
-{
-  inode_writer_lock_acquire (file_get_inode (f));
-}
-
-void
-file_mutex_acquire (struct file *f)
-{
-  inode_mutex_acquire (file_get_inode (f));
-}
-
-void
-file_writer_lock_release (struct file *f)
-{
-  inode_writer_lock_release (file_get_inode (f));
-}
-
-void
-file_mutex_release (struct file *f)
-{
-  inode_mutex_release (file_get_inode (f));
-}
-
-uint32_t
-file_readcount (struct file *f)
-{
-  return inode_readcount (file_get_inode (f));
-}
-
-void
-file_readcount_pp (struct file *f)
-{
-  inode_readcount_pp (file_get_inode (f));
-}
-
-void
-file_readcount_mm (struct file *f)
-{
-  inode_readcount_mm (file_get_inode (f));
-}
-#endif

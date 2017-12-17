@@ -19,41 +19,45 @@ struct dir_entry
     disk_sector_t inode_sector;         /* Sector number of header. */
     char name[NAME_MAX + 1];            /* Null terminated file name. */
     bool in_use;                        /* In use or free? */
+    uint32_t level;
   };
 
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
+#ifdef PRJ4
 dir_create (disk_sector_t sector, disk_sector_t parent, size_t entry_cnt) 
 {
-#ifdef INODE_PRINT
-  printf ("dir_create - sector : %d, parent : %d, cnt : %d...\n",\
-      sector, parent, entry_cnt);
-#endif
-  if (!inode_create (sector, entry_cnt * sizeof (struct dir_entry), 1))
+  uint32_t new_level;
+  if (sector != ROOT_DIR_SECTOR)
+  {
+    struct inode *parent_inode = inode_open (parent);
+    new_level = inode_get_level (parent_inode) + 1;
+    inode_close (parent_inode);
+    if (new_level > 213)
+      return false;
+  }
+  else new_level = 0;
+
+  uint32_t new_info = inode_set_level (1, new_level);
+  if (!inode_create (sector, entry_cnt * sizeof (struct dir_entry), new_info))
     return false;
-#ifdef INODE_PRINT
-  printf ("dir_create - inode_create done...\n");
-#endif
 
   struct dir *d = dir_open (inode_open (sector));
   if (!dir_add (d, ".", sector) || !dir_add (d, "..", parent))
   {
-#ifdef INODE_PRINT
-  printf("dir create - dir add fail\n");
-#endif
     dir_close (d);
     return false;
   }
-#ifdef INODE_PRINT
-  printf("dir create - dir add success\n");
-#endif
   dir_close (d);
-#ifdef INODE_PRINT
-  printf ("dir_create ends with true\n");
-#endif
   return true;
 }
+#else
+dir_create (disk_sector_t sector, size_t entry_cnt) 
+{
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+}
+#endif
 
 /* Opens and returns the directory for the given INODE, of which
    it takes ownership.  Returns a null pointer on failure. */
@@ -64,7 +68,11 @@ dir_open (struct inode *inode)
   if (inode != NULL && dir != NULL)
     {
       dir->inode = inode;
+#ifdef PRJ4
       dir->pos = 2 * sizeof (struct dir_entry);
+#else
+      dir->pos = 0;
+#endif
       return dir;
     }
   else
@@ -126,7 +134,6 @@ lookup (const struct dir *dir, const char *name,
 
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
-  {
     if (e.in_use && !strcmp (name, e.name)) 
       {
         if (ep != NULL)
@@ -135,7 +142,6 @@ lookup (const struct dir *dir, const char *name,
           *ofsp = ofs;
         return true;
       }
-  }
   return false;
 }
 
@@ -192,28 +198,15 @@ dir_add (struct dir *dir, const char *name, disk_sector_t inode_sector)
      Otherwise, we'd need to verify that we didn't get a short
      read due to something intermittent such as low memory. */
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-       ofs += sizeof e) {
-#ifdef INODE_PRINT
-    printf("dir add - finding vacant entry, offset : %d\n", ofs);
-#endif
+       ofs += sizeof e)
     if (!e.in_use)
       break;
-  }
-#ifdef INODE_PRINT
-  printf("dir add - entry found?");
-#endif
 
   /* Write slot. */
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
-#ifdef SYNRW
-  inode_writer_lock_acquire (dir->inode);
-#endif
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
-#ifdef SYNRW
-  inode_writer_lock_release (dir->inode);
-#endif
 
  done:
   return success;
@@ -242,27 +235,18 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
+#ifdef PRJ4
   if (inode_get_inumber (inode) == thread_current ()->current_dir)
     goto done;
 
-  if (inode_get_info (inode) == 1 && !dir_is_empty (inode))
+  if (inode_is_directory (inode) && !dir_is_empty (inode))
     goto done;
+#endif
 
   /* Erase directory entry. */
   e.in_use = false;
-#ifdef SYNRW
-  inode_writer_lock_acquire (dir->inode);
-#endif
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
-#ifdef SYNRW
-  {
-    inode_writer_lock_release (dir->inode);
-#endif
     goto done;
-#ifdef SYNRW
-  }
-  inode_writer_lock_release (dir->inode);
-#endif
 
   /* Remove inode. */
   inode_remove (inode);
@@ -293,6 +277,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   return false;
 }
 
+#ifdef PRJ4
 /* return true if dir is empty except . and .. */
 bool
 dir_is_empty (struct inode *inode)
@@ -308,4 +293,20 @@ dir_is_empty (struct inode *inode)
     }
   return true;
 }
+
+void
+print_all_directory (struct inode *inode)
+{
+  off_t pos = 0;
+  struct dir_entry e;
+
+  while (inode_read_at (inode, &e, sizeof e, pos) == sizeof e) 
+    {
+      pos += sizeof e;
+      if (e.in_use)
+      printf ("directory sector : %d, pos : %d, in_use : %d, name : %s\n",\
+          inode_get_inumber (inode), pos, e.in_use, e.name);
+    }
+}
+#endif
 

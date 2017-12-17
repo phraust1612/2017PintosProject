@@ -1,5 +1,6 @@
 #ifndef __VM_PAGE_H
 #define __VM_PAGE_H
+#ifdef PRJ3
 #include "threads/thread.h"
 #include "lib/stdint.h"
 #include "threads/vaddr.h"
@@ -29,4 +30,5 @@ bool page_swap_out_index (const void *address, struct thread* tcurrent, bool new
 void remove_page (struct hash_elem* target_elem, void *aux UNUSED);
 void set_new_dirty_page (void* new_esp, struct thread* t);
 
+#endif
 #endif

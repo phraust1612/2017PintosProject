@@ -1,4 +1,5 @@
 #include "vm/page.h"
+#ifdef PRJ3
 
 unsigned
 page_hash (const struct hash_elem *p_, void *aux UNUSED)
@@ -95,3 +96,4 @@ set_new_dirty_page (void* new_esp, struct thread* t)
     pagedir_set_stack (t->pagedir, pg_round_down (t->user_esp), true);
   }
 }
+#endif

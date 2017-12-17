@@ -1,5 +1,6 @@
 #ifndef __VM_SWAP_H
 #define __VM_SWAP_H
+#ifdef PRJ3
 #include "lib/kernel/bitmap.h"
 #include "lib/kernel/list.h"
 #include "devices/disk.h"
@@ -25,9 +26,8 @@ void frame_table_delete (uint32_t pd);
 void frame_elem_delete (void* target_addr, uint32_t* target_pd);
 size_t frame_table_size (void);
 
-void frame_lock_try_release (struct thread* t);
-void swap_lock_try_release (struct thread* t);
 void swap_lock_acquire (void);
 void swap_lock_release (void);
 
+#endif
 #endif

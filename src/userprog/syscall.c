@@ -3,10 +3,12 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#ifdef USERPROG
 #include "threads/vaddr.h"
+bool check_valid_pointer (void* pointer, struct intr_frame* f);
+#endif
 
 static void syscall_handler (struct intr_frame *);
-bool check_valid_pointer (void* pointer, struct intr_frame* f);
 
 void
 syscall_init (void) 
@@ -17,21 +19,29 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  bool mode;
+#ifndef USERPROG
+  printf ("system call!\n");
+  thread_exit ();
+#else
   int* arg;
   const char* buffer;
   int* size;
-  disk_sector_t new_sector;
-  char *ret_ptr, *next_ptr;
-  struct page* pi;
-  struct mmap_elem* mi;
   struct file_elem* f_elem;
   struct child_elem* t_elem;
+  struct thread* tcurrent = thread_current();
+#ifdef PRJ4
+  char** ptpt;
+  disk_sector_t new_sector;
+  char *ret_ptr, *next_ptr;
   struct dir *dir;
   struct inode *inode, *dummy_inode;
-  struct thread* tcurrent = thread_current();
+#endif
+#ifdef PRJ3
+  struct page* pi;
+  struct mmap_elem* mi;
   if (is_user_vaddr (f->esp))
     set_new_dirty_page (f->esp, tcurrent);
+#endif
 
   if(!check_valid_pointer(f->esp, f))
   {
@@ -125,9 +135,9 @@ syscall_handler (struct intr_frame *f UNUSED)
         }
         file_lock_acquire();
         f_elem->f = filesys_open((const char*)buffer);
-#ifdef FILESYS
+#ifdef PRJ4
         if (!f_elem->f) f_elem->d = NULL;
-        else f_elem->d = dir_open (file_get_inode (f_elem->f));
+        else f_elem->d = dir_open (inode_reopen (file_get_inode (f_elem->f)));
 #endif
         file_lock_release();
         if(f_elem->f == NULL)
@@ -182,31 +192,11 @@ syscall_handler (struct intr_frame *f UNUSED)
         else
         {
           f_elem = find_file(*arg);
-          if(f_elem != NULL/* && pagedir_is_writable(tcurrent->pagedir, buffer) */)
+          if(f_elem != NULL)
           {
-#ifdef SYNRW
-            file_mutex_acquire (f_elem->f);
-            file_readcount_pp (f_elem->f);
-            if (file_readcount (f_elem->f) == 1)
-              file_writer_lock_acquire (f_elem->f);
-            file_mutex_release (f_elem->f);
-#else
             file_lock_acquire ();
-#endif
             f->eax = file_read(f_elem->f, (void*)buffer, (int) *size);
-#ifdef FILESIZE_PRINT
-            printf ("sys_read - size : %d\n",\
-                inode_length (file_get_inode (f_elem->f)));
-#endif
-#ifdef SYNRW
-            file_mutex_acquire (f_elem->f);
-            file_readcount_mm (f_elem->f);
-            if (file_readcount (f_elem->f) == 0)
-              file_writer_lock_release (f_elem->f);
-            file_mutex_release (f_elem->f);
-#else
             file_lock_release ();
-#endif
           }
           else
             f->eax = -1;
@@ -240,21 +230,9 @@ syscall_handler (struct intr_frame *f UNUSED)
             f->eax = 0;
           else
           {
-#ifdef SYNRW
-            file_writer_lock_acquire (f_elem->f);
-#else
             file_lock_acquire ();
-#endif
             f->eax = file_write (f_elem->f, (void*) buffer, (int) *size);
-#ifdef FILESIZE_PRINT
-            printf ("sys_write - size : %d\n", \
-                inode_length (file_get_inode (f_elem->f)));
-#endif
-#ifdef SYNRW
-            file_writer_lock_release (f_elem->f);
-#else
             file_lock_release ();
-#endif
           }
         }
       }
@@ -313,7 +291,9 @@ syscall_handler (struct intr_frame *f UNUSED)
         {
           file_lock_acquire();
           file_close ((struct file*) f_elem->f);
-          free (f_elem->d);
+#ifdef PRJ4
+          dir_close (f_elem->d);
+#endif
           list_remove(&f_elem->elem);
           free (f_elem);
           file_lock_release();
@@ -326,6 +306,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         thread_exit();
       }
       break;
+#ifdef PRJ3
     case SYS_MMAP:
       arg = (int*)f->esp + 1;  // fd
       buffer = (void*)* ((int*)f->esp + 2); // addr
@@ -433,10 +414,14 @@ syscall_handler (struct intr_frame *f UNUSED)
         thread_exit();
       }
       break;
+#endif
+#ifdef PRJ4
     case SYS_CHDIR:
       buffer = (void*)* ((int*)f->esp + 1); // dir name
 
       ret_ptr = palloc_get_page (PAL_ZERO);
+      ptpt = malloc (sizeof (char**));
+      memcpy (ptpt, &ret_ptr, sizeof (char**));
       if (!ret_ptr)
       {
         printf("%s: exit(%d)\n", tcurrent->name, -1);
@@ -453,7 +438,8 @@ syscall_handler (struct intr_frame *f UNUSED)
         if (dir == NULL)
         {
           file_lock_release ();
-          palloc_free_page (pg_round_down (ret_ptr));
+          palloc_free_page (*ptpt);
+          free (ptpt);
           f->eax = false;
           printf("%s: exit(%d)\n", tcurrent->name, -1);
           thread_exit();
@@ -476,19 +462,17 @@ syscall_handler (struct intr_frame *f UNUSED)
             f->eax = true;
             tcurrent->current_dir = \
                 inode_get_inumber (dir_get_inode (dir));
-#ifdef INODE_PRINT
-            printf("current_dir : %d\n", \
-                tcurrent->current_dir);
-#endif
           }
         }
         dir_close (dir);
-        palloc_free_page (pg_round_down (ret_ptr));
+        palloc_free_page (*ptpt);
+        free (ptpt);
       }
       else
       {
         f->eax = false;
-        palloc_free_page (pg_round_down (ret_ptr));
+        palloc_free_page (*ptpt);
+        free (ptpt);
         printf("%s: exit(%d)\n", tcurrent->name, -1);
         thread_exit();
       }
@@ -497,6 +481,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       buffer = (void*)* ((int*)f->esp + 1); // dir name
 
       ret_ptr = palloc_get_page (PAL_ZERO);
+      ptpt = malloc (sizeof (char**));
+      memcpy (ptpt, &ret_ptr, sizeof (char**));
       if (!ret_ptr)
       {
         printf("%s: exit(%d)\n", tcurrent->name, -1);
@@ -520,17 +506,12 @@ syscall_handler (struct intr_frame *f UNUSED)
         {
           file_lock_release ();
           f->eax = false;
-          palloc_free_page (pg_round_down (ret_ptr));
+          palloc_free_page (*ptpt);
+          free (ptpt);
           printf("%s: exit(%d)\n", tcurrent->name, -1);
           thread_exit();
         }
         f->eax = false;
-#ifdef INODE_PRINT
-        printf ("inode : %p...\n", inode);
-
-        printf ("sys_mkdir - ret_ptr : %p, next_ptr : %p...\n",
-            ret_ptr, next_ptr);
-#endif
 
         for (ret_ptr = strtok_r (ret_ptr, "/", &next_ptr);
             ret_ptr != NULL;
@@ -554,24 +535,30 @@ syscall_handler (struct intr_frame *f UNUSED)
               f->eax = false;
             else
             {
-              free_map_allocate (1, &new_sector);
-#ifdef INODE_PRINT
-              printf ("new_sector : %d, inode : %p...\n", \
-                  new_sector, inode);
-#endif
-              dir_create (new_sector, inode_get_inumber (inode), 16);
+              if (!free_map_allocate (1, &new_sector))
+              {
+                f->eax = false;
+                break;
+              }
+              if (!dir_create (new_sector, inode_get_inumber (inode), 16))
+              {
+                f->eax = false;
+                break;
+              }
               dir_add (dir, ret_ptr, new_sector);
               f->eax = true;
             }
           }
         }
-        palloc_free_page (pg_round_down (ret_ptr));
+        palloc_free_page (*ptpt);
+        free (ptpt);
         dir_close (dir);
       }
       else
       {
         f->eax = false;
-        palloc_free_page (pg_round_down (ret_ptr));
+        palloc_free_page (*ptpt);
+        free (ptpt);
         printf("%s: exit(%d)\n", tcurrent->name, -1);
         thread_exit();
       }
@@ -596,6 +583,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
 
           f->eax = dir_readdir (dir, buffer);
+          dir = NULL;
           file_lock_release();
         }
         else f->eax = false;
@@ -615,7 +603,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         if(f_elem != NULL)
         {
           file_lock_acquire();
-          f->eax = 1 == inode_get_info (file_get_inode (f_elem->f));
+          f->eax = inode_is_directory (file_get_inode (f_elem->f));
           file_lock_release();
         }
         else f->eax = false;
@@ -647,13 +635,16 @@ syscall_handler (struct intr_frame *f UNUSED)
         thread_exit();
       }
       break;
+#endif
     default:
       printf ("system call!\n");
       thread_exit ();
       return;
   }
+#endif
 }
 
+#ifdef USERPROG
 // false면 free/release해야할 상황이 있을 수 있음.
 bool
 check_valid_pointer (void* pointer, struct intr_frame* f)
@@ -665,10 +656,15 @@ check_valid_pointer (void* pointer, struct intr_frame* f)
   void* get_page = pagedir_get_page(pd, pointer);
   if (!get_page)
   {
+#ifdef PRJ3
     if (page_lookup (pointer, tcurrent)) return true;
     else if (pointer > f->esp) return true; /* stack page에 있을 경우로 예상됨 */
     else return false;
+#else
+    return false;
+#endif
   }
 
   return true;
 }
+#endif

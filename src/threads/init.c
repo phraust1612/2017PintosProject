@@ -29,11 +29,13 @@
 #else
 #include "tests/threads/tests.h"
 #endif
+#ifdef PRJ3
+#include "vm/swap.h"
+#endif
 #ifdef FILESYS
 #include "devices/disk.h"
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
-#include "vm/swap.h"
 #endif
 
 /* Amount of physical memory, in 4 kB pages. */
@@ -114,7 +116,11 @@ main (void)
   /* Initialize file system. */
   disk_init ();
   filesys_init (format_filesys);
+#endif
+#ifdef PRJ3
   swap_table_bitmap_init ();
+#endif
+#ifdef PRJ4
   write_back_start ();
 #endif
 

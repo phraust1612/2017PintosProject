@@ -187,3 +187,11 @@ page_from_pool (const struct pool *pool, void *page)
 
   return page_no >= start_page && page_no < end_page;
 }
+
+#ifdef PRJ4
+void
+print_all_kernel_pool (void)
+{
+  bitmap_dump (kernel_pool.used_map);
+}
+#endif

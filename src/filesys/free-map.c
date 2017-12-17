@@ -72,7 +72,11 @@ void
 free_map_create (void) 
 {
   /* Create inode. */
+#ifdef PRJ4
   if (!inode_create (FREE_MAP_SECTOR, bitmap_file_size (free_map), 0))
+#else
+  if (!inode_create (FREE_MAP_SECTOR, bitmap_file_size (free_map)))
+#endif
     PANIC ("free map creation failed");
 
   /* Write bitmap to file. */

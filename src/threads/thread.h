@@ -5,30 +5,22 @@
 #include "threads/synch.h"
 #endif
 
-#ifndef __VM_PAGE_H
+#ifdef PRJ3
 #include "vm/page.h"
-#endif
-
-#ifndef __VM_SWAP_H
 #include "vm/swap.h"
+#include "lib/kernel/hash.h"
+typedef int mapid_t;
 #endif
 
-#ifndef __LIB_KERNEL_HASH_H
-#include "lib/kernel/hash.h"
-#endif
-#ifdef FILESYS
+#ifdef PRJ4
 #include "devices/disk.h"
-#endif
-#ifndef __FILESYS_CACHE_H
 #include "filesys/cache.h"
 #endif
 
-typedef int mapid_t;
 
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-// #define FILESIZE_PRINT
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -44,6 +36,7 @@ enum thread_status
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
+#ifdef USERPROG
 struct child_elem 
   {
     struct list_elem elem;              /* List element. */
@@ -56,12 +49,14 @@ struct file_elem
 {
   struct list_elem elem;
   struct file* f;
-#ifdef FILESYS
+#ifdef PRJ4
   struct dir *d;
 #endif
   int fd;
 };
+#endif
 
+#ifdef PRJ3
 struct mmap_elem
 {
   struct list_elem elem;
@@ -71,6 +66,7 @@ struct mmap_elem
   int fd;
   struct file* f;
 };
+#endif
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
@@ -153,6 +149,7 @@ struct thread
     struct lock* plock_acq;
     int origin_priority;
 
+#ifdef USERPROG
     struct semaphore creation_sema;
 
     struct lock finding_sema_lock;
@@ -162,22 +159,22 @@ struct thread
 
     // struct file* 와 대응하는 file descriptor(int)의 리스트
     struct list file_list;
-    struct list mmap_list;
     // 다음 할당될 fd
     int next_fd;
-    int next_mid;
-
     struct file* exec_file;
+
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+#endif
+#ifdef PRJ3
+    struct list mmap_list;
+    int next_mid;
     struct hash supplementary_page_table;
     struct lock supplementary_page_lock;
 
     void* user_esp;
-
-#ifdef USERPROG
-    /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
 #endif
-#ifdef FILESYS
+#ifdef PRJ4
     disk_sector_t current_dir;
 #endif
 
@@ -192,7 +189,6 @@ extern bool thread_mlfqs;
 
 void thread_init (void);
 void thread_start (void);
-void write_back_start (void);
 
 void thread_tick (void);
 void thread_print_stats (void);
@@ -214,6 +210,7 @@ void recalculate_priority(void);
 int thread_get_priority (void);
 void thread_set_priority (int);
 void specific_thread_set_priority (int new_priority, struct thread* new_t);
+void lock_release_all (struct thread *);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
@@ -224,17 +221,25 @@ int thread_get_load_avg (void);
 // return true if x has less wakeup_tick than y
 bool less_wakeup_tick(struct list_elem* x, struct list_elem* y, void* aux UNUSED);
 bool higher_priority (struct list_elem* x, struct list_elem* y, void* aux UNUSED);
+
+#ifdef USERPROG
 struct file_elem* find_file(int fd);
 struct child_elem* find_child(tid_t tid, struct thread* t);
-
 void file_lock_acquire(void);
 void file_lock_release(void);
-void file_lock_try_release (struct thread* t);
+#endif
 
+#ifdef PRJ3
 void supplementary_lock_acquire(struct thread* t);
 void supplementary_lock_release(struct thread* t);
-
 void munmap_list (mapid_t target_mid);
 bool exist_mmap_elem (int fd, struct thread* tcurrent);
+#endif
+
+#ifdef PRJ4
+void write_back_start (void);
+void print_all_filelist (void);
+void print_all_pages (void);
+#endif
 
 #endif /* threads/thread.h */

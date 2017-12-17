@@ -6,7 +6,9 @@
 
 /* Number of timer interrupts per second. */
 #define TIMER_FREQ 100
+#ifdef PRJ4
 #define WRITE_BACK_PERIOD 25
+#endif
 
 void timer_init (void);
 void timer_calibrate (void);

@@ -29,10 +29,6 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
-  // file_name을 직접 strtok_r하면 코드섹션에서 왔을 수도
-  // 있는 *file_name을 건드릴 수 있다.
-  // 따라서 한 번 더 페이지를 할당해서 복사해서 쓴다.
-  char *fn_copy2;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -40,13 +36,18 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (PAL_ZERO);
   if (fn_copy == NULL)
     return TID_ERROR;
+  strlcpy (fn_copy, file_name, PGSIZE);
+#ifdef USERPROG
+  // file_name을 직접 strtok_r하면 코드섹션에서 왔을 수도
+  // 있는 *file_name을 건드릴 수 있다.
+  // 따라서 한 번 더 페이지를 할당해서 복사해서 쓴다.
+  char *fn_copy2;
   fn_copy2 = palloc_get_page (PAL_ZERO);
   if (fn_copy2 == NULL)
   {
     palloc_free_page(fn_copy);
     return TID_ERROR;
   }
-  strlcpy (fn_copy, file_name, PGSIZE);
   strlcpy (fn_copy2, file_name, PGSIZE);
 
   char dummy[200];
@@ -75,9 +76,13 @@ process_execute (const char *file_name)
   list_push_back(&tcurrent->child_list, &c_elem->elem);
 
   if (tid == TID_ERROR)
-  {
     free (c_elem);
-  }
+#else
+  /* Create a new thread to execute FILE_NAME. */
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  if (tid == TID_ERROR)
+    palloc_free_page (fn_copy);
+#endif
   return tid;
 }
 
@@ -89,7 +94,6 @@ start_process (void *f_name)
   char *file_name = f_name;
   struct intr_frame if_;
   bool success;
-  struct thread* tcurrent = thread_current();
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -97,8 +101,13 @@ start_process (void *f_name)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+#ifdef USERPROG
+  struct thread* tcurrent = thread_current();
   tcurrent->tparent->child_success = success;
   sema_up(&tcurrent->tparent->creation_sema);
+#else
+  palloc_free_page (file_name);
+#endif
 
   /* If load failed, quit. */
   if (!success) 
@@ -126,6 +135,7 @@ start_process (void *f_name)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+#ifdef USERPROG
   struct list_elem* elem_pointer = NULL;
   struct child_elem* i = NULL;
   int ans;
@@ -151,6 +161,7 @@ process_wait (tid_t child_tid UNUSED)
   }
 
   lock_release(&tcurrent->finding_sema_lock);
+#endif
   return -1;
 }
 
@@ -161,6 +172,7 @@ process_exit (void)
   struct thread *tcurrent = thread_current ();
   uint32_t *pd;
 
+#ifdef USERPROG
   struct list_elem* elem_pointer = NULL;
   struct child_elem* i = NULL;
 
@@ -170,35 +182,13 @@ process_exit (void)
   while (elem_pointer != list_end(&tcurrent->child_list))
   {
     i = list_entry(elem_pointer , struct child_elem, elem);
-#ifdef FILESIZE_PRINT
-    printf ("parent : %d , child : %d\n",\
-        tcurrent->tid, i->child_tid);
-#endif
     lock_release(&tcurrent->finding_sema_lock);
     process_wait(i->child_tid);
     lock_acquire(&tcurrent->finding_sema_lock);
     elem_pointer = list_next(elem_pointer);
   }
   lock_release(&tcurrent->finding_sema_lock);
-
-  frame_lock_try_release (tcurrent);
-  swap_lock_try_release (tcurrent);
-  file_lock_try_release (tcurrent);
-
-  // frame_table에서 이 프로세스에 해당하는 frame_elem deallocate
-  frame_table_delete (tcurrent->pagedir);
-
-  file_close(tcurrent->exec_file);
-
-  /* mmap list 지움 */
-  struct mmap_elem* mi = NULL;
-  elem_pointer = list_begin (&tcurrent->mmap_list);
-  while (elem_pointer != list_end (&tcurrent->mmap_list))
-  {
-    mi = list_entry (elem_pointer, struct mmap_elem, elem);
-    elem_pointer = list_next (elem_pointer);
-    munmap_list (mi->mid);
-  }
+  lock_release_all (tcurrent);
 
   // struct thread의 file_list를 deallocate
   struct file_elem* fi =NULL;
@@ -212,11 +202,31 @@ process_exit (void)
     free (fi);
   }
   file_lock_release();
+#endif
+
+#ifdef PRJ3
+  // frame_table에서 이 프로세스에 해당하는 frame_elem deallocate
+  frame_table_delete (tcurrent->pagedir);
+
+  /* mmap list 지움 */
+  struct mmap_elem* mi = NULL;
+  elem_pointer = list_begin (&tcurrent->mmap_list);
+  while (elem_pointer != list_end (&tcurrent->mmap_list))
+  {
+    mi = list_entry (elem_pointer, struct mmap_elem, elem);
+    elem_pointer = list_next (elem_pointer);
+    munmap_list (mi->mid);
+  }
 
   // supplementary page table이 더 늦게 삭제되어야 한다.
   supplementary_lock_acquire(tcurrent);
   hash_destroy(&tcurrent->supplementary_page_table, (hash_action_func*) remove_page);
   supplementary_lock_release(tcurrent);
+#endif
+
+#ifdef USERPROG
+  file_close(tcurrent->exec_file);
+#endif
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -235,6 +245,7 @@ process_exit (void)
       pagedir_destroy (pd);
     }
 
+#ifdef USERPROG
   // 부모가 wait하고 있는 세마를 찾아서 sema_up
   if(tcurrent->tparent->tid != tcurrent->tid)
   {
@@ -253,6 +264,7 @@ process_exit (void)
     }
     lock_release(&tcurrent->tparent->finding_sema_lock);
   }
+#endif
 
   return;
 }
@@ -336,7 +348,11 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
+#ifdef USERPROG
 static bool setup_stack (void **esp, char* arg);
+#else
+static bool setup_stack (void **esp);
+#endif
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -355,23 +371,25 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
-  char dummy[200];
-  const char* delim = " ";
-  char* fn_copy; 
-
-  file_lock_acquire();
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
 
+#ifdef USERPROG
+  char dummy[200];
+  const char* delim = " ";
+  char* fn_copy; 
+
   fn_copy = palloc_get_page (PAL_ZERO);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-  /* Open executable file. */
   file_name = strtok_r((char*) file_name, delim, dummy);
+  file_lock_acquire();
+#endif
+  /* Open executable file. */
   file = filesys_open (file_name);
 
   if (file == NULL) 
@@ -389,9 +407,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
+#ifdef PRJ3
   supplementary_lock_acquire(t);
   hash_init (&t->supplementary_page_table, page_hash, page_less, NULL);
   supplementary_lock_release(t);
+#endif
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -461,7 +481,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 
   /* Set up stack. */
+#ifdef USERPROG
   if (!setup_stack (esp, fn_copy))
+#else
+  if (!setup_stack (esp))
+#endif
     goto done;
   palloc_free_page(fn_copy);
 
@@ -469,12 +493,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+#ifdef USERPROG
   t->exec_file = file_reopen (file);
   file_deny_write(t->exec_file);
+#endif
 
  done:
   /* We arrive here whether the load is successful or not. */
+#ifdef USERPROG
   file_lock_release();
+#endif
+  // ???
   return success;
 }
 
@@ -549,7 +578,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
+#ifdef PRJ3
   struct thread* tcurrent = thread_current();
+#else
+  file_seek (file, ofs);
+#endif
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Do calculate how to fill this page.
@@ -558,6 +591,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
+#ifdef PRJ3
       struct page* pi = malloc (sizeof(struct page));
       if (pi == NULL)
         return false;
@@ -574,10 +608,32 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       hash_replace (&tcurrent->supplementary_page_table, &pi->elem);
       supplementary_lock_release(tcurrent);
 
+      ofs += page_read_bytes;
+#else
+      /* Get a page of memory. */
+      uint8_t *kpage = palloc_get_page (PAL_USER);
+      if (kpage == NULL)
+        return false;
+
+      /* Load this page. */
+      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+        {
+          palloc_free_page (kpage);
+          return false; 
+        }
+      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+      /* Add the page to the process's address space. */
+      if (!install_page (upage, kpage, writable)) 
+        {
+          palloc_free_page (kpage);
+          return false; 
+        }
+#endif
+
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
-      ofs += page_read_bytes;
       upage += PGSIZE;
     }
   return true;
@@ -586,12 +642,17 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
+#ifdef USERPROG
 setup_stack (void **esp, char* arg) 
+#else
+setup_stack (void **esp)
+#endif
 {
   uint8_t *kpage;
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+#ifdef PRJ3
   if (kpage == NULL)
   {
     // stack page할당이 실패하면 swap out해야함
@@ -659,7 +720,18 @@ setup_stack (void **esp, char* arg)
   fr_elem->vaddr = ((uint8_t *) PHYS_BASE) - PGSIZE;
   fr_elem->pd_thread = tcurrent;
   frame_table_push_back(fr_elem);
+#else
+  if (kpage != NULL)
+     {
+      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      if (success)
+        *esp = PHYS_BASE;
+      else
+        palloc_free_page (kpage); 
+     }
+#endif
 
+#ifdef USERPROG
   int tmp;
   int* ebp = (int*)*esp;
   int argc = 0;
@@ -740,8 +812,10 @@ setup_stack (void **esp, char* arg)
   if(*esp < ebp - 0x1000)
     return false;
 
+#ifdef PRJ3
   set_new_dirty_page (*esp, tcurrent);
-  // hex_dump (0, *esp, 0x100, true);
+#endif
+#endif
 
   return success;
 }
