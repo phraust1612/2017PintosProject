@@ -23,9 +23,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   printf ("system call!\n");
   thread_exit ();
 #else
-  int* arg;
+  int *arg, *size, syscall_no;
   const char* buffer;
-  int* size;
   struct file_elem* f_elem;
   struct child_elem* t_elem;
   struct thread* tcurrent = thread_current();
@@ -43,14 +42,19 @@ syscall_handler (struct intr_frame *f UNUSED)
     set_new_dirty_page (f->esp, tcurrent);
 #endif
 
+  struct semaphore checksema;
+  sema_init (&checksema, 0);
   if(!check_valid_pointer(f->esp, f))
   {
-    buffer = (const char*) tcurrent->name;
-    printf("%s: exit(%d)\n", buffer, -1);
+    printf("%s: exit(%d)\n", tcurrent->name, -1);
+    sema_up (&checksema);
     thread_exit();
     return;
   }
-  int syscall_no = * (int*)f->esp ;
+  else
+    sema_up (&checksema);
+  sema_down (&checksema);
+  syscall_no = * (int*)f->esp ;
   switch(syscall_no)
   {
     case SYS_HALT:
@@ -61,8 +65,10 @@ syscall_handler (struct intr_frame *f UNUSED)
         printf("%s: exit(%d)\n", buffer, -1);
       else
       {
+        lock_acquire (&tcurrent->tparent->child_list_lock);
         t_elem = find_child(tcurrent->tid, tcurrent->tparent);
         t_elem->exit_status = *arg;
+        lock_release (&tcurrent->tparent->child_list_lock);
         printf("%s: exit(%d)\n", buffer, (int) *arg);
       }
       thread_exit();
@@ -97,9 +103,9 @@ syscall_handler (struct intr_frame *f UNUSED)
       // return 값은 eax로 넘겨준다.
       if(check_valid_pointer((void*)buffer, f) && check_valid_pointer(size, f))
       {
-        file_lock_acquire();
+        file_lock_acquire ();
         f->eax = filesys_create((const char*)buffer, (int) *size);
-        file_lock_release();
+        file_lock_release ();
       }
       else
       {
@@ -112,9 +118,9 @@ syscall_handler (struct intr_frame *f UNUSED)
       buffer = (const char*)* ((int*)f->esp + 1);
       if(check_valid_pointer((void*) buffer, f))
       {
-        file_lock_acquire();
+        file_lock_acquire ();
         f->eax = filesys_remove ((const char*)buffer);
-        file_lock_release();
+        file_lock_release ();
       }
       else
       {
@@ -133,13 +139,13 @@ syscall_handler (struct intr_frame *f UNUSED)
           f->eax = -1;
           break;
         }
-        file_lock_acquire();
+        file_lock_acquire ();
         f_elem->f = filesys_open((const char*)buffer);
+        file_lock_release ();
 #ifdef PRJ4
         if (!f_elem->f) f_elem->d = NULL;
         else f_elem->d = dir_open (inode_reopen (file_get_inode (f_elem->f)));
 #endif
-        file_lock_release();
         if(f_elem->f == NULL)
         {
           free (f_elem);
@@ -149,7 +155,9 @@ syscall_handler (struct intr_frame *f UNUSED)
         {
           f_elem->fd = tcurrent->next_fd;
           tcurrent->next_fd++;
+          lock_acquire (&tcurrent->file_list_lock);
           list_push_back(&tcurrent->file_list, &f_elem->elem);
+          lock_release (&tcurrent->file_list_lock);
           f->eax = f_elem->fd;
         }
       }
@@ -167,9 +175,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         f_elem = find_file(*arg);
         if(f_elem != NULL)
         {
-          file_lock_acquire();
           f->eax = (int) inode_length(file_get_inode(f_elem->f));
-          file_lock_release();
         }
         else f->eax = 0;
       }
@@ -194,9 +200,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           f_elem = find_file(*arg);
           if(f_elem != NULL)
           {
-            file_lock_acquire ();
             f->eax = file_read(f_elem->f, (void*)buffer, (int) *size);
-            file_lock_release ();
           }
           else
             f->eax = -1;
@@ -230,9 +234,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             f->eax = 0;
           else
           {
-            file_lock_acquire ();
             f->eax = file_write (f_elem->f, (void*) buffer, (int) *size);
-            file_lock_release ();
           }
         }
       }
@@ -252,9 +254,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         f_elem = find_file(*arg);
         if(f_elem != NULL)
         {
-          file_lock_acquire();
           file_seek(f_elem->f, (uint32_t) *size);
-          file_lock_release();
         }
       }
       else
@@ -270,9 +270,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         f_elem = find_file(*arg);
         if(f_elem != NULL)
         {
-          file_lock_acquire();
           f->eax = file_tell(f_elem->f);
-          file_lock_release();
         }
       }
       else
@@ -289,14 +287,14 @@ syscall_handler (struct intr_frame *f UNUSED)
         f_elem = find_file(*arg);
         if(f_elem != NULL)
         {
-          file_lock_acquire();
+          file_lock_acquire ();
           file_close ((struct file*) f_elem->f);
 #ifdef PRJ4
           dir_close (f_elem->d);
 #endif
+          file_lock_release ();
           list_remove(&f_elem->elem);
           free (f_elem);
-          file_lock_release();
         }
       }
       else
@@ -315,9 +313,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         f_elem = find_file (*arg);
         if (f_elem != NULL)
         {
-          file_lock_acquire ();
           off_t mapped_size = file_length (f_elem->f);
-          file_lock_release ();
           if (mapped_size <=0
             || buffer == NULL
             || pg_ofs (buffer) != 0)
@@ -437,7 +433,6 @@ syscall_handler (struct intr_frame *f UNUSED)
           dir = dir_open (inode_open (tcurrent->current_dir));
         if (dir == NULL)
         {
-          file_lock_release ();
           palloc_free_page (*ptpt);
           free (ptpt);
           f->eax = false;
@@ -504,7 +499,6 @@ syscall_handler (struct intr_frame *f UNUSED)
         }
         if (dir == NULL)
         {
-          file_lock_release ();
           f->eax = false;
           palloc_free_page (*ptpt);
           free (ptpt);
@@ -572,11 +566,9 @@ syscall_handler (struct intr_frame *f UNUSED)
         f_elem = find_file(*arg);
         if(f_elem != NULL)
         {
-          file_lock_acquire();
           dir = f_elem->d;
           if (dir == NULL)
           {
-            file_lock_release ();
             f->eax = false;
             printf("%s: exit(%d)\n", tcurrent->name, -1);
             thread_exit();
@@ -584,7 +576,6 @@ syscall_handler (struct intr_frame *f UNUSED)
 
           f->eax = dir_readdir (dir, buffer);
           dir = NULL;
-          file_lock_release();
         }
         else f->eax = false;
       }
@@ -602,9 +593,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         f_elem = find_file(*arg);
         if(f_elem != NULL)
         {
-          file_lock_acquire();
           f->eax = inode_is_directory (file_get_inode (f_elem->f));
-          file_lock_release();
         }
         else f->eax = false;
       }
@@ -622,9 +611,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         f_elem = find_file(*arg);
         if(f_elem != NULL)
         {
-          file_lock_acquire();
           f->eax = inode_get_inumber (file_get_inode (f_elem->f));
-          file_lock_release();
         }
         else f->eax = -1;
       }

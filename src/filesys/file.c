@@ -9,6 +9,7 @@ struct file
     struct inode *inode;        /* File's inode. */
     off_t pos;                  /* Current position. */
     bool deny_write;            /* Has file_deny_write() been called? */
+    struct lock pos_lock;
   };
 
 /* Opens a file for the given INODE, of which it takes ownership,
@@ -23,6 +24,7 @@ file_open (struct inode *inode)
       file->inode = inode;
       file->pos = 0;
       file->deny_write = false;
+      lock_init (&file->pos_lock);
       return file;
     }
   else
@@ -68,8 +70,10 @@ file_get_inode (struct file *file)
 off_t
 file_read (struct file *file, void *buffer, off_t size) 
 {
+  lock_acquire (&file->pos_lock);
   off_t bytes_read = inode_read_at (file->inode, buffer, size, file->pos);
   file->pos += bytes_read;
+  lock_release (&file->pos_lock);
   return bytes_read;
 }
 
@@ -98,8 +102,10 @@ file_write (struct file *file, const void *buffer, off_t size)
   if (inode_is_directory (file->inode))
     return -1;
 #endif
+  lock_acquire (&file->pos_lock);
   off_t bytes_written = inode_write_at (file->inode, buffer, size, file->pos);
   file->pos += bytes_written;
+  lock_release (&file->pos_lock);
   return bytes_written;
 }
 
@@ -123,11 +129,13 @@ void
 file_deny_write (struct file *file) 
 {
   ASSERT (file != NULL);
+  lock_acquire (&file->pos_lock);
   if (!file->deny_write) 
     {
       file->deny_write = true;
       inode_deny_write (file->inode);
     }
+  lock_release (&file->pos_lock);
 }
 
 /* Re-enables write operations on FILE's underlying inode.
@@ -137,11 +145,13 @@ void
 file_allow_write (struct file *file) 
 {
   ASSERT (file != NULL);
+  lock_acquire (&file->pos_lock);
   if (file->deny_write) 
     {
       file->deny_write = false;
       inode_allow_write (file->inode);
     }
+  lock_release (&file->pos_lock);
 }
 
 /* Returns the size of FILE in bytes. */
@@ -159,7 +169,9 @@ file_seek (struct file *file, off_t new_pos)
 {
   ASSERT (file != NULL);
   ASSERT (new_pos >= 0);
+  lock_acquire (&file->pos_lock);
   file->pos = new_pos;
+  lock_release (&file->pos_lock);
 }
 
 /* Returns the current position in FILE as a byte offset from the

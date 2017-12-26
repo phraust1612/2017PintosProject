@@ -8,6 +8,7 @@
 #include "filesys/directory.h"
 #include "devices/disk.h"
 #include "threads/palloc.h"
+#include "threads/vaddr.h"
 
 /* The disk that contains the file system. */
 struct disk *filesys_disk;

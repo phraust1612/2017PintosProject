@@ -41,6 +41,7 @@ struct child_elem
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
+    struct thread* tchild;
     tid_t child_tid;
     int exit_status;
   };
@@ -152,13 +153,15 @@ struct thread
 #ifdef USERPROG
     struct semaphore creation_sema;
 
-    struct lock finding_sema_lock;
+    struct lock child_list_lock;
     struct list child_list;
     struct thread* tparent;
     bool child_success;
+    struct thread* ttmpchild;
 
     // struct file* 와 대응하는 file descriptor(int)의 리스트
     struct list file_list;
+    struct lock file_list_lock;
     // 다음 할당될 fd
     int next_fd;
     struct file* exec_file;
@@ -200,6 +203,7 @@ void thread_block (void);
 void thread_unblock (struct thread *);
 
 struct thread *thread_current (void);
+struct thread *thread_find (tid_t tid);
 tid_t thread_tid (void);
 const char *thread_name (void);
 

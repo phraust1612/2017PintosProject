@@ -210,12 +210,7 @@ page_fault (struct intr_frame *f)
       if (pagedir_is_dirty (fr_elem->pd, fr_elem->vaddr))
       {
         pagedir_set_dirty (fr_elem->pd, fr_elem->vaddr, false);
-        file_lock_acquire ();
-        int32_t prev_off = file_tell (victim_page->f);
-        file_seek (victim_page->f, victim_page->load_filepos);
-        ASSERT (file_write (victim_page->f, victim_kvaddr, victim_page->load_read_bytes) == victim_page->load_read_bytes);
-        file_seek (victim_page->f, prev_off);
-        file_lock_release ();
+        ASSERT (file_write_at (victim_page->f, victim_kvaddr, victim_page->load_read_bytes, victim_page->load_filepos) == victim_page->load_read_bytes);
       }
     }
 
@@ -304,17 +299,13 @@ page_fault (struct intr_frame *f)
     // do lazy load
     if (!swap_out)
     {
-      int32_t prev_off = file_tell (ff);
-      file_seek (ff, (uint32_t) filepos);
-      if (file_read (ff, kpage, read_bytes) != (int) read_bytes)
+      if (file_read_at (ff, kpage, read_bytes, filepos) != (int) read_bytes)
       {
-        file_seek (ff, prev_off);
         palloc_free_page (kpage);
         printf("%s: exit(%d)\n", thread_current()->name, -1);
         thread_exit (); 
         return ; 
       }
-      file_seek (ff, prev_off);
 
       /* Add the page to the process's address space. */
       if (pagedir_get_page (tcurrent->pagedir, upage) != NULL
