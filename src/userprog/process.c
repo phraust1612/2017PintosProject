@@ -220,10 +220,11 @@ process_exit (void)
 void
 process_kill (struct thread *ttarget)
 {
-  if (!ttarget) return;
-  ASSERT (ttarget->magic == 0xcd6abf4b)
+  /* ttarget이 망가졌으면 이미 죽은 자식이므로 바로 리턴하여
+   * 그 부모가 더 기다리지 않게 한다 */
+  if (!ttarget || ttarget->magic != 0xcd6abf4b) return;
 
-  uint32_t *pd;
+  uint32_t *pd = ttarget->pagedir;
   struct semaphore *child_sema = NULL;
   struct list_elem* elem_pointer = NULL;
   struct child_elem* i = NULL;
@@ -301,7 +302,6 @@ process_kill (struct thread *ttarget)
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-  pd = ttarget->pagedir;
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -311,7 +311,11 @@ process_kill (struct thread *ttarget)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
+#ifndef PRJ3
       ttarget->pagedir = NULL;
+#else
+      pd = NULL;
+#endif
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
@@ -537,16 +541,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp))
 #endif
     goto done;
-  palloc_free_page(fn_copy);
 
+  palloc_free_page(fn_copy);
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
-  success = true;
 #ifdef USERPROG
   t->exec_file = file_reopen (file);
   file_deny_write(t->exec_file);
 #endif
+  success = true;
 
  done:
   /* We arrive here whether the load is successful or not. */
