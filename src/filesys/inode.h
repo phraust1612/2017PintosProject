@@ -5,7 +5,9 @@
 #include "filesys/off_t.h"
 #include "devices/disk.h"
 
+// #define INDEXED_STRUCTURE
 struct bitmap;
+struct inode_disk;
 
 void inode_init (void);
 #ifdef PRJ4
@@ -25,16 +27,22 @@ void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
 
 #ifdef PRJ4
-#define DIRECT_NO 123
 #include "filesys/cache.h"
+#ifdef INDEXED_STRUCTURE
+bool allocate_inode_disk (uint32_t, struct inode_disk*);
+void release_inode_disk (uint32_t, struct inode_disk*);
+#else
 bool allocate_inode_disk (uint32_t sectors, disk_sector_t inode_sector, off_t length, int add_direct_idx, uint32_t info, disk_sector_t origin_sector, uint32_t origin_sectors);
 void release_inode_disk (uint32_t sectors, disk_sector_t inode_sector);
+#endif
 int inode_open_cnt (struct inode *);
 void print_all_inodes (void);
 uint32_t inode_get_info (struct inode *);
 bool inode_is_directory (struct inode *);
 uint32_t inode_get_level (struct inode *);
 uint32_t inode_set_level (uint32_t, uint32_t);
+void inode_lock_acquire (void);
+void inode_lock_release (void);
 #endif
 
 #endif /* filesys/inode.h */

@@ -30,6 +30,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct lock ready_lock;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -107,6 +108,7 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  lock_init (&ready_lock);
   list_init (&ready_list);
 #ifdef USERPROG
   lock_init (&file_rw_lock);
@@ -574,6 +576,7 @@ init_thread (struct thread *t, const char *name, int priority)
 #ifdef USERPROG
   t->tparent = running_thread();
   if(!is_thread(t->tparent)) t->tparent = t;
+  t->ttmpchild = NULL;
   // recursively set current thread's level
   t->next_fd = 2;
   t->child_success = false;
@@ -581,7 +584,8 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init(&t->creation_sema,0);
   list_init(&t->file_list);
   list_init(&t->child_list);
-  lock_init(&t->finding_sema_lock);
+  lock_init(&t->child_list_lock);
+  lock_init (&t->file_list_lock);
 #endif
 #ifdef PRJ3
   t->next_mid = 0;
@@ -727,14 +731,40 @@ bool higher_priority (struct list_elem* x, struct list_elem* y, void* aux UNUSED
 void
 lock_release_all (struct thread* tcurrent)
 {
+  enum intr_level old_level = intr_disable();
   struct lock* i = NULL;
   struct list_elem *elem_pointer = list_begin (&tcurrent->lock_own_list);
   while (elem_pointer != list_end (&tcurrent->lock_own_list))
   {
     i = list_entry (elem_pointer, struct lock, own_elem);
     elem_pointer = list_next (elem_pointer);
-    lock_release (i);
+    if (i->holder == thread_current ())
+      lock_release (i);
+    else
+      list_remove (&tcurrent->elem);
+    list_remove (&i->own_elem);
   }
+  intr_set_level(old_level);
+}
+
+struct thread *
+thread_find (tid_t tid)
+{
+  struct thread* i;
+  lock_acquire (&ready_lock);
+  struct list_elem *elem_pointer = list_begin (&ready_list);
+  while (elem_pointer != list_end (&ready_list))
+  {
+    i = list_entry (elem_pointer , struct thread, elem);
+    if (i->tid == tid)
+    {
+      lock_release (&ready_list);
+      return i;
+    }
+    elem_pointer = list_next(elem_pointer);
+  }
+  lock_release (&ready_lock);
+  return NULL;
 }
 
 #ifdef USERPROG
@@ -745,14 +775,20 @@ find_file (int fd)
   struct list_elem* elem_pointer = NULL;
   struct file_elem* i = NULL;
   struct thread* tcurrent = thread_current();
-  
+
+  lock_acquire (&tcurrent->file_list_lock);
   elem_pointer = list_begin(&(tcurrent->file_list));
   while (elem_pointer != list_end(&tcurrent->file_list))
   {
     i = list_entry(elem_pointer, struct file_elem, elem);
-    if (i->fd == fd) return i;
     elem_pointer = list_next(elem_pointer);
+    if (i->fd == fd)
+    {
+      lock_release (&tcurrent->file_list_lock);
+      return i;
+    }
   }
+  lock_release (&tcurrent->file_list_lock);
   return NULL;
 }
 
@@ -768,25 +804,21 @@ file_lock_release(void)
   lock_release(&file_rw_lock);
 }
 
+/* need to acuire lock before call this func */
 struct child_elem*
 find_child (tid_t tid, struct thread* t)
 {
   struct list_elem* elem_pointer = NULL;
   struct child_elem* i = NULL;
 
-  lock_acquire(&t->finding_sema_lock);
   elem_pointer = list_begin(&t->child_list);
   while (elem_pointer != list_end(&t->child_list))
   {
     i = list_entry(elem_pointer, struct child_elem, elem);
     if (i->child_tid == tid)
-    {
-      lock_release(&t->finding_sema_lock);
       return i;
-    }
     elem_pointer = list_next(elem_pointer);
   }
-  lock_release(&t->finding_sema_lock);
   return NULL;
 }
 #endif
@@ -821,19 +853,15 @@ munmap_list (mapid_t target_mid)
       count = 0;
       void* buffer = mi->start_vaddr;
       size_t read_bytes = mi->read_bytes;
-      file_lock_acquire ();
       prev_off = file_tell (mi->f);
-      file_lock_release ();
       while (read_bytes > 0)
       {
         // write back to file disk
         real_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         if (pagedir_is_dirty (tcurrent->pagedir, buffer + count*PGSIZE))
         {
-          file_lock_acquire ();
           file_seek (mi->f, count*PGSIZE);
-          ASSERT (file_write (mi->f, buffer+count*PGSIZE, real_read_bytes) == real_read_bytes);
-          file_lock_release ();
+          file_write (mi->f, buffer+count*PGSIZE, real_read_bytes);
         }
 
         // frame table이랑 supplementary page table에서 지우고
@@ -852,9 +880,7 @@ munmap_list (mapid_t target_mid)
 
       // tcurrent->mmap_list 에서 지운다.
       elem_pointer = list_remove (elem_pointer);
-      file_lock_acquire ();
       file_close (mi->f);
-      file_lock_release ();
       free (mi);
 
       return;
@@ -895,7 +921,9 @@ print_all_filelist (void)
     elem_pointer = list_next (elem_pointer);
   }
 }
+#endif
 
+#ifdef PRJ3
 void
 print_all_pages (void)
 {
