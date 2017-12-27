@@ -311,11 +311,7 @@ process_kill (struct thread *ttarget)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-#ifndef PRJ3
       ttarget->pagedir = NULL;
-#else
-      pd = NULL;
-#endif
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
@@ -543,14 +539,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
 
   palloc_free_page(fn_copy);
-  /* Start address. */
-  *eip = (void (*) (void)) ehdr.e_entry;
-
 #ifdef USERPROG
   t->exec_file = file_reopen (file);
   file_deny_write(t->exec_file);
 #endif
   success = true;
+
+  /* Start address. */
+  *eip = (void (*) (void)) ehdr.e_entry;
 
  done:
   /* We arrive here whether the load is successful or not. */

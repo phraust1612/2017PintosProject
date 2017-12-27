@@ -557,7 +557,6 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     buffer_cache_read (refer_inode_disk.indirect, &refer_inode_disk,\
         DISK_SECTOR_SIZE, 0);
 #endif
-
   int sector_ofs = offset % DISK_SECTOR_SIZE;
 #else
   uint8_t *bounce = NULL;
