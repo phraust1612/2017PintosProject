@@ -1,0 +1,286 @@
+       	 -------------------------+
+		     |	 2017  fall  CS 330    |
+		     | PROJECT 4: FILE SYSTEMS |
+		     |	   DESIGN DOCUMENT     |
+		     -------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+>> You can write this document in Korean! (We recommend!)
+
+20120421 민병욱 phraust@kaist.ac.kr
+20130391 오승윤 syoh0708@kaist.ac.kr
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+		     INDEXED AND EXTENSIBLE FILES
+		     ============================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+struct inode_disk
+  {
+    disk_sector_t sector;        /* this inode_disk's sector */
+    uint32_t info;               /* 0 : file, 1 : dir */
+    off_t length;                /* File size in bytes. */
+    int32_t direct[DIRECT_NO];
+    int32_t indirect;
+    unsigned magic;              /* Magic number. */
+  };
+
+>> A2: What is the maximum size of a file supported by your inode
+>> structure?  Show your work.
+
+우리 inode_disk는 linked list의 방식을 취하고 있기 때문에 이론상
+무한히 이어질 수 있으므로 파일크기도 무한히 지원 가능하다.
+
+---- SYNCHRONIZATION ----
+
+>> A3: Explain how your code avoids a race if two processes attempt to
+>> extend a file at the same time.
+
+gloabal 변수인 file lock을 모든 파일시스템 함수를 사용할 때마다
+acquire하여 race condition을 피했다.
+
+>> A4: Suppose processes A and B both have file F open, both
+>> positioned at end-of-file.  If A reads and B writes F at the same
+>> time, A may read all, part, or none of what B writes.  However, A
+>> may not read data other than what B writes, e.g. if B writes
+>> nonzero data, A is not allowed to see all zeros.  Explain how your
+>> code avoids this race.
+
+B 가 먼저 write를 하기 시작했으면 file_lock을 acquire하고 시작하여
+inode의 length와 뒤의 내용을 수정하는 동안 다른 프로세스가 아예
+filesys관련 함수를 사용하지 못하게 하여 race condition을 해결하였다.
+만약 A가 먼저 read를 하기 시작하면 똑같이 file lock을 acquire하여
+A가 끝날 때까지 B가 write를 시작할 수 없으며, 이 때 length는 아직
+이전의 end-of-file에 머물러 있으므로 A는 새로운 내용을 읽지 못하고
+read를 종료한다.
+
+>> A5: Explain how your synchronization design provides "fairness".
+>> File access is "fair" if readers cannot indefinitely block writers
+>> or vice versa.  That is, many processes reading from a file cannot
+>> prevent forever another process from writing the file, and many
+>> processes writing to a file cannot prevent another process forever
+>> from reading the file.
+
+모든 filesys함수를 요청하는 프로세스는 같은 file_lock을 acquire하게
+되는데 한 프로세스가 filesys 함수를 다 쓰고 release할 때 다음 프로세스를
+선택하는 기준은 가장 priority가 높은 프로세스가 쓸 수 있게 하였다.
+이는 완전한 "fairness"가 아니므로 낮은 priority의 프로세스는 filesys
+함수를 사용하지 못할 수도 있지만 priority순으로 먼저 스케쥴링 하는 것이
+더 합당하다고 생각하여 이러한 방식을 채택하였다.
+
+---- RATIONALE ----
+
+>> A6: Is your inode structure a multilevel index?  If so, why did you
+>> choose this particular combination of direct, indirect, and doubly
+>> indirect blocks?  If not, why did you choose an alternative inode
+>> structure, and what advantages and disadvantages does your
+>> structure have, compared to a multilevel index?
+
+우리가 선택한 inode structure는 linked listed structure를 선택하였다.
+이 구조의 장점은 무한한 파일의 크기도 모두 inode structure에 담을
+수 있지만, 단점으로는 임의의 offset에 대하여 접근하고 싶으면 inode
+의 head sector부터 offset이 있는 곳까지 디스크를 읽어야 하므로
+disk operation을 많이 수행하여 비효율적일 수 있다.
+
+			    SUBDIRECTORIES
+			    ==============
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+ 
+@@ -49,6 55,9 @@ struct file_elem
+ {
+   struct list_elem elem;
+   struct file* f;
+#ifdef FILESYS
+  struct dir *d;
+#endif
+   int fd;
+ };
+
+@@ -167,6 176,9 @@ struct thread
+     /* Owned by userprog/process.c. */
+     uint32_t *pagedir;                  /* Page directory. */
+#endif
+#ifdef FILESYS
+    disk_sector_t current_dir;
+#endif
+
+---- ALGORITHMS ----
+
+>> B2: Describe your code for traversing a user-specified path.  How
+>> do traversals of absolute and relative paths differ?
+
+파일 이름을 argument로 주는 모든 함수마다 (syscalls, filesys_create, etc.)
+parsing을 수행하여 첫 번째 character가 '/'이면 root dir부터 parsing된
+디렉토리를 차례대로lookup하고, 그렇지 않으면 struct thread에 있는
+current_dir가 가리키는 dir부터 lookup하는 과정을 반복한다.
+
+>> B3: Look over "pwd.c" in src/examples.  Briefly explain how it
+>> determines the present working directory.
+
+child_num 에 inumber syscall에 "."라는 이름으로 현재 디렉토리의
+sector를 얻는데, 이는 inumber syscall에서 파싱한 결과 첫 character가
+'/'가 아니므로 struct thread에 있는 current_dir부터 lookup해서 
+찾은 dir_entry의 sector 를 준 결과이다.
+
+이 후 반복문을 돌면서 name에 ".."을 붙여주면서 relative 이름으로
+상위 디렉토리를 open 하는데 root의 경우는 상위 디렉토리의 sector가
+자기 자신과 같으므로 해당 경우는 반복문을 탈출하여 current directory의
+full name을 얻게 된다.
+
+---- SYNCHRONIZATION ----
+
+>> B4: How do you prevent races on directory entries?  For example,
+>> only one of two simultaneous attempts to remove a single file
+>> should succeed, as should only one of two simultaneous attempts to
+>> create a file with the same name, and so on.
+
+filesys함수를 사용하는 모든 부분에서 같은 file_lock을 acquire하였는데
+이를 통해 directory entry에 대해 일어날 수 있는 race condition을
+피할 수 있었다.
+
+>> B5: Does your implementation allow a directory to be removed if it
+>> is open by a process or if it is in use as a process's current
+>> working directory?  If so, what happens to that process's future
+>> file system operations?  If not, how do you prevent it?
+
+어떤 프로세스가 current working directory로 있는 디렉토리는 삭제하지
+못하게 방지하였다. 이는 dir_remove에 struct thread에 있는 current_dir
+와 삭제하려고 받은 inode의 sector값이 같으면 바로 false를 return하게
+함으로써 구현하였다.
+
+---- RATIONALE ----
+
+>> B6: Explain why you chose to represent the current directory of a
+>> process the way you did.
+
+우리가 사용한 방식은 struct thread에 current directory가 있는
+disk sector값을 저장하는 방식을 선택하였는데, 이는 name string을
+갖고 있으면 일례로 "/b/a"와 "/a"가 존재할 때 "a" 디렉토리가 될 수 있는
+것이 한 가지로 대응되지 않기 때문에 sector값을 갖는 것으로 하였다.
+다만 구현을 마치고보니 다시 디자인 한다면 struct inode*를 갖게
+하도록 바꾸는 것이 조금 더 유리할 수 있을 것이라는 생각에 이르렀다.
+그 이유는 현재 방식의 단점이 sector값으로 갖고 있으면 그 디렉토리를
+얻기 위해선 매번 disk read를 해야하기 때문에 이미 열어놓은 struct
+inode*를 갖는다면 좀 더 효율적으로 구현할 수 있었을 것 같다.
+
+			     BUFFER CACHE
+			     ============
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+struct file_cache
+{
+  bool allocated;
+  uint32_t sector_no;
+  bool accessed;
+  bool dirty;
+  uint8_t data[DISK_SECTOR_SIZE];
+};
+
+static struct file_cache buffer_cache[BUFFER_CACHE_SIZE];
+static struct lock buffer_cache_lock;
+static uint32_t lookup_start_index;
+
+---- ALGORITHMS ----
+
+>> C2: Describe how your cache replacement algorithm chooses a cache
+>> block to evict.
+
+buffer가 다 찼을 때는 clock alogorithm을 사용하여 evict하였다.
+
+>> C3: Describe your implementation of write-behind.
+
+기본적으로 buffer cache가 evict되어 나갈 때 만약 그 buffer가
+dirty가 true면 disk에 write back하면서 evict된다. 그러나 crack등의
+문제로 예기치 못하게 buffer cache에 쥐고 있던 내용이 디스크와
+오차가 벌어질 수 있으므로 write_back_thread를 시스템 부팅 시
+만들어 실행하는데 이는 dirty가 true인 모든 buffer cache를 disk에
+write back하고 일정시간동안 sleep하는 과정의 반복을 하는 
+background thread이다.
+
+>> C4: Describe your implementation of read-ahead.
+
+read-ahead는 이번 구현에서 지원하지 못한다.
+
+---- SYNCHRONIZATION ----
+
+>> C5: When one process is actively reading or writing data in a
+>> buffer cache block, how are other processes prevented from evicting
+>> that block?
+
+buffer cache를 접근할 때 buffer_cache_lock을 acquire하여 한
+buffer cache block만이 아니라 전체 buffer cache에 대해 동시에 하나의
+프로세스만 접근할 수 있게끔 하였다.
+
+>> C6: During the eviction of a block from the cache, how are other
+>> processes prevented from attempting to access the block?
+
+마찬가지로 우리 디자인의 방식은 buffer cache관련된 기능에 대해
+하나의 buffer cache lock을 acquire하기 때문에, evict하는 동안
+동시에 다른 프로세스가 어떠한 buffer cache block라도 접근하지 못한다.
+
+---- RATIONALE ----
+
+>> C7: Describe a file workload likely to benefit from buffer caching,
+>> and workloads likely to benefit from read-ahead and write-behind.
+
+buffer caching으로 이득볼 수 있는 workload의 예시로는 최근에 사용한
+sector 몇 가지를 반복해서 접근하는 workload들이 그 예시가 된다.
+왜냐하면 recently used block을 반복해서 접근하면 buffer cache에
+load해놓은 것을 다시 disk operation을 하지 않고 읽고 쓸 수 있기 때문이다.
+
+read-ahead로 이득볼 수 있는 workload는 순차적으로 다음 sector를
+읽을 것이 예상 가능한 workload들이 그 예시다.
+write-behind로 이득볼 수 있는 workload는 계속해서 다른 sector에 
+파일을 쓰는 workload가 그 예시가 될 수 있다. 여러 개의 sector에
+쓰면 evict될 때 write back 하는 것보다 미리 write behind하면 
+victim을 선택하자마자 그 buffer cache block을 비워낼 수 있기 때문이다.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students in future quarters?
+
+>> Any other comments?

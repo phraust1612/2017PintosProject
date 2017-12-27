@@ -11,8 +11,10 @@ For more details about the environment, please check out [here](https://github.c
 Be aware that our KAIST pintos project's initial skeleton codes differ from standford's.  
 Download skeleton codes from [here](https://github.com/hangpark/pintos-dev-env-kaist/raw/master/pintos.tar.gz)  
 
-This project passes all tests of project 1,2,3  
-and fails only 1 test (tests/vm/page-merge-mm) of project 4  
+Since we didn't follow 4.4BSD Scheduler,  
+this project fails only 7 tests (tests/threads/mlfqs-...) of project 1  
+and fails 1 test (tests/vm/page-merge-mm) of project 4  
+Except those 8, it passes all remaining tests of whole projects.  
 
 ## Install
 
@@ -22,7 +24,7 @@ You need some pre-requisites to run my pintos codes well.
 * GCC 3.4
 * Bochs 2.2.6
 
-If you are familiar with Docker, please use this [environment](https://github.com/hangpark/pintos-dev-env-kaist)  
+If you are familiar with Docker, please use this [docker image](https://github.com/hangpark/pintos-dev-env-kaist)  
 
 ### Pintos
 
